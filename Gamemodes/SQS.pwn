@@ -39,7 +39,8 @@ new RandomMSG[][] =
   "[SERVER] Está cansado da Deagle? Use /armas",
   "[SERVER] Utilize /mudar para mudar de time!",
   "[SERVER] Não faça DB (Drive-BY, Atropelar ou matar alguem de dentro do carro) ou será punido!",
-  "[SERVER] Se você está num veiculo e a vitima estiver em outro, não é drive-by!"/*,
+  "[SERVER] Se você está num veiculo e a vitima estiver em outro, não é drive-by!",
+  "[SERVER] Se quiser entrar no modo pacífico use /godmode" /*,
   "[SERVER] Você pode fazer missões dentro do matata, mas cuidado para não ser morto!"*/
 };
 
@@ -73,7 +74,8 @@ enum pInfo {
 	pMoney,
 	pScore,
 	pAdmin,
-	pVip
+	pVip,
+	bool: god
 };
 
 new PlayerInfo[MAX_PLAYERS][pInfo];
@@ -247,7 +249,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 	if(strcmp(cmd, "/comandos", true) == 0) {
 		SendClientMessage(playerid, COLOR_DGREEN, " - AJUDA - /ajuda /info /comandos /armas /objetivo /regras");
 		SendClientMessage(playerid, COLOR_DGREEN, " - ARMAS - /m4 /sniper /deagle /shotgun /mp5");
-		SendClientMessage(playerid, COLOR_DGREEN, " - JOGADOR - /mudar /kill");
+		SendClientMessage(playerid, COLOR_DGREEN, " - JOGADOR - /mudar /kill /godmode");
 		SendClientMessage(playerid, COLOR_DGREEN, " - TELEPORTS - /arena");
 
 		return 1;
@@ -390,6 +392,29 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
 		return 1;
     }
+
+	if(strcmp(cmdtext, "/godmode", true) == 0) {
+		new Float:Life;
+        GetPlayerHealth(playerid,Life);
+        
+        if(Life < 100) return SendClientMessage(playerid,COLOR_RED,"Você só pode entrar no moto pacífico com a vida cheia.");
+        
+	    if(PlayerInfo[playerid][god] == false){
+	        PlayerInfo[playerid][god] = true;
+	        SetPlayerHealth(playerid, 999999);
+        	SetPlayerArmour(playerid, 999999);
+        	ResetPlayerWeapons(playerid);
+        	SendClientMessage(playerid,COLOR_GREEN,"Godmode ativo");
+	    } else {
+	        PlayerInfo[playerid][god] = false;
+	        SetPlayerHealth(playerid, 100);
+        	SetPlayerArmour(playerid, 0);
+        	ResetPlayerWeapons(playerid);
+        	SendClientMessage(playerid,COLOR_RED,"Godmode desativado");
+    	}
+    	
+	    return 1;
+	}
     //-----------------------------------------------------------
  	if(strcmp(cmd, "/dargrana", true) == 0) {
 	    new tmp[256];
@@ -1111,3 +1136,6 @@ stock GetPlayerNameEx(playerid)
 	GetPlayerName(playerid, Naome, 24);
 	return Naome;
 }
+
+forward GetGodmodePlayer(playerid);
+public GetGodmodePlayer(playerid) return PlayerInfo[playerid][god];
