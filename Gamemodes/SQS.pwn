@@ -11,7 +11,7 @@
 #define COLOR_BLACK 0x000000FF
 #define COLOR_BLUE 0x2641FEAA
 #define COLOR_GREEN 0x33AA33AA
-#define COLOR_RED 0xAA3333AA
+#define COLOR_RED 0xFF0000FF
 #define COLOR_YELLOW 0xFFFF00AA
 #define COLOR_WHITE 0xFFFFFFAA
 #define INACTIVE_PLAYER_ID 255
@@ -113,6 +113,7 @@ public OnPlayerConnect(playerid) {
     SetPlayerWantedLevel(playerid,0);
     gActivePlayers[playerid]++;
     SetPVarInt(playerid,"TK",0);
+    PlayerInfo[playerid][god] = false;
     
     //contador de usuários ativos
 	format(strings, 15, "%d Online",GetOnLinePlayers());
@@ -249,7 +250,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 	if(strcmp(cmd, "/comandos", true) == 0) {
 		SendClientMessage(playerid, COLOR_DGREEN, " - AJUDA - /ajuda /info /comandos /armas /objetivo /regras");
 		SendClientMessage(playerid, COLOR_DGREEN, " - ARMAS - /m4 /sniper /deagle /shotgun /mp5");
-		SendClientMessage(playerid, COLOR_DGREEN, " - JOGADOR - /mudar /kill /godmode");
+		SendClientMessage(playerid, COLOR_DGREEN, " - JOGADOR - /mudar /kill /godmode /v");
 		SendClientMessage(playerid, COLOR_DGREEN, " - TELEPORTS - /arena");
 
 		return 1;
@@ -262,12 +263,14 @@ public OnPlayerCommandText(playerid, cmdtext[])
 		SendClientMessage(playerid, COLOR_DGREEN, " - 100 balas de MP5 ($2000) /mp5");
 		SendClientMessage(playerid, COLOR_DGREEN, " - 50 balas de Shotgun ($2000) /shotgun");
 		SendClientMessage(playerid, COLOR_DGREEN, " - arma suprema ($1) /suprema");
+		SendClientMessage(playerid, COLOR_DGREEN, " - Você não pode comprar armas no modo pacífico");
 
 		return 1;
 	}
 	//-----------------------------------------------------------
 	if(strcmp(cmd, "/arena", true) == 0) {
 		if(GetPVarInt(playerid,"Arena") == 1) return SendClientMessage(playerid,COLOR_RED,"Você ja foi pra arena!");
+		if(PlayerInfo[playerid][god] == true) return SendClientMessage(playerid,COLOR_RED,"Desabilite o modo pacífico primeiro (/godmode)");
 		
 		SetPVarInt(playerid,"Arena",1);
 		SetPlayerPos(playerid,2479.7864,2318.5823,91.6300);
@@ -280,6 +283,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     }
     //-----------------------------------------------------------
 	if(strcmp(cmd, "/deagle", true) == 0) {
+	    if(PlayerInfo[playerid][god] == true) return SendClientMessage(playerid,COLOR_RED,"Desabilite o modo pacífico primeiro (/godmode)");
     	if(GetPlayerMoney(playerid)>=1000) {
         	GivePlayerWeapon(playerid,24,100);
         	GivePlayerMoney(playerid,-1000);
@@ -292,6 +296,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 	}
 	//-----------------------------------------------------------
 	if(strcmp(cmd, "/sniper", true) == 0) {
+	    if(PlayerInfo[playerid][god] == true) return SendClientMessage(playerid,COLOR_RED,"Desabilite o modo pacífico primeiro (/godmode)");
     	if(GetPlayerMoney(playerid)>=5000) {
         	GivePlayerWeapon(playerid,34,100);
         	GivePlayerMoney(playerid,-5000);
@@ -305,6 +310,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 	}
 	//-----------------------------------------------------------
 	if(strcmp(cmd, "/m4", true) == 0) {
+	    if(PlayerInfo[playerid][god] == true) return SendClientMessage(playerid,COLOR_RED,"Desabilite o modo pacífico primeiro (/godmode)");
     	if(GetPlayerMoney(playerid)>=3000){
         	GivePlayerWeapon(playerid,31,100);
         	GivePlayerMoney(playerid,-3000);
@@ -318,6 +324,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 	}
 	//-----------------------------------------------------------
 	if(strcmp(cmd, "/mp5", true) == 0) {
+	    if(PlayerInfo[playerid][god] == true) return SendClientMessage(playerid,COLOR_RED,"Desabilite o modo pacífico primeiro (/godmode)");
     	if(GetPlayerMoney(playerid)>=2000) {
         	GivePlayerWeapon(playerid,29,100);
         	GivePlayerMoney(playerid,-2000);
@@ -331,6 +338,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 	}
 	//-----------------------------------------------------------
 	if(strcmp(cmd, "/shotgun", true) == 0) {
+	    if(PlayerInfo[playerid][god] == true) return SendClientMessage(playerid,COLOR_RED,"Desabilite o modo pacífico primeiro (/godmode)");
     	if(GetPlayerMoney(playerid)>=2000) {
         	GivePlayerWeapon(playerid,25,50);
         	GivePlayerMoney(playerid,-2000);
@@ -344,6 +352,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 	}
 	//-----------------------------------------------------------
 	if(strcmp(cmd, "/suprema", true) == 0) {
+	    if(PlayerInfo[playerid][god] == true) return SendClientMessage(playerid,COLOR_RED,"Desabilite o modo pacífico primeiro (/godmode)");
         GivePlayerWeapon(playerid,10,1);
         GivePlayerMoney(playerid,-1);
   		SendClientMessage(playerid,COLOR_GREY, "Você comprou a suprema ponta dupla por 1 dólar");
@@ -355,6 +364,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     
     //-----------------------------------------------------------
 	if(strcmp(cmd, "/mudar", true) == 0) {
+		PlayerInfo[playerid][god] = false;
 	    ForceClassSelection(playerid);
 	    SetPlayerHealth(playerid,0);
         format(string,128,"[ID:%i] %s Resolveu mudar de time (/mudar)",playerid,Player_Name),
@@ -381,6 +391,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 	}
 	//-----------------------------------------------------------
  	if(strcmp(cmdtext, "/kill", true) == 0) {
+		PlayerInfo[playerid][god] = false;
         new Float:Life;
         GetPlayerHealth(playerid,Life);
         
@@ -397,11 +408,11 @@ public OnPlayerCommandText(playerid, cmdtext[])
 		new Float:Life;
         GetPlayerHealth(playerid,Life);
         
-        if(Life < 100) return SendClientMessage(playerid,COLOR_RED,"Você só pode entrar no moto pacífico com a vida cheia.");
-        
 	    if(PlayerInfo[playerid][god] == false){
+	        if(Life < 100) return SendClientMessage(playerid,COLOR_RED,"Você só pode entrar no moto pacífico com a vida cheia.");
+	        
 	        PlayerInfo[playerid][god] = true;
-	        SetPlayerHealth(playerid, 999999);
+	        SetPlayerHealth(playerid, Float:0x7F800000);
         	SetPlayerArmour(playerid, 999999);
         	ResetPlayerWeapons(playerid);
         	SendClientMessage(playerid,COLOR_GREEN,"Godmode ativo");
@@ -411,6 +422,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         	SetPlayerArmour(playerid, 0);
         	ResetPlayerWeapons(playerid);
         	SendClientMessage(playerid,COLOR_RED,"Godmode desativado");
+        	GivePlayerWeapon(playerid,24,500);
     	}
     	
 	    return 1;
@@ -458,7 +470,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 	
 	//admin commands
 	
-	if (PlayerInfo[playerid][pAdmin] > 0){ //antes de ler o comando, checa se é adm
+	if (PlayerInfo[playerid][pAdmin] > 0 || IsPlayerAdmin(playerid)){ //antes de ler o comando, checa se é adm
 	                                        //assim um player normal vai receber a mensagem que o comando não existe
         //-----------------------------------------------------------
 	    if(strcmp(cmd, "/admin", true) == 0) {
@@ -478,7 +490,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 	    }
 	    //-----------------------------------------------------------
 		if(strcmp(cmd, "/promover", true) == 0) {
-		    if (PlayerInfo[playerid][pAdmin] < 5) return SendClientMessage(playerid, COLOR_YELLOW, "NO ENOUGH LEVEL, STRANGER!");
+		    if (PlayerInfo[playerid][pAdmin] < 3 || !IsPlayerAdmin(playerid)) return SendClientMessage(playerid, COLOR_YELLOW, "NO ENOUGH LEVEL, STRANGER!");
 		
   			new tmp[256], player2, level;
 			tmp = strtok(cmdtext, idx);
@@ -586,9 +598,51 @@ public OnPlayerCommandText(playerid, cmdtext[])
 		//-----------------------------------------------------------
 	} //fim dos comandos de ADM
 	
-	if(PlayerInfo[playerid][pVip] == 1) { //comandos VIP
-	    //em breve
-	    return 1;
+	if(PlayerInfo[playerid][pVip] == 1 || PlayerInfo[playerid][pAdmin] >= 3) { //comandos VIP
+	
+        if(strcmp(cmd, "/vip", true) == 0) {
+		    if (PlayerInfo[playerid][pAdmin] < 5 || !IsPlayerAdmin(playerid)) return SendClientMessage(playerid, COLOR_YELLOW, "NO ENOUGH LEVEL, STRANGER!");
+
+  			new tmp[256], player2, level;
+			tmp = strtok(cmdtext, idx);
+
+			if(!strlen(tmp)) {
+				SendClientMessage(playerid, COLOR_GREY, "USE: /promover [ID] [0 - NÃO / 1 - SIM]");
+				return 1;
+			}
+			player2 = strval(tmp);
+			if(!IsPlayerConnected(player2)) return SendClientMessage(playerid, COLOR_YELLOW, "Jogador não conectado");
+
+			tmp = strtok(cmdtext, idx);
+			if(!strlen(tmp)) {
+				SendClientMessage(playerid, COLOR_GREY, "USE: /promover [ID] [0 - NÃO / 1 - SIM]");
+				return 1;
+			}
+			level = strval(tmp);
+			if (level < 0 || level > 1) return SendClientMessage(playerid, COLOR_YELLOW, "nível inválido");
+
+			PlayerInfo[player2][pVip] = level;
+			SendClientMessage(playerid, COLOR_YELLOW, "Você alterou o status de vip do jogador");
+			SendClientMessage(player2, COLOR_YELLOW, "Seu status de vip foi alterado");
+			return 1;
+		}
+
+
+
+		if(strcmp(cmd, "/nitro", true) == 0) {
+		    new Float:X, Float:Y, Float:Z;
+			GetPlayerPos(playerid, X, Y, Z);
+		    
+		    if(!IsPlayerInAnyVehicle(playerid)) return SendClientMessage(playerid, COLOR_RED, "Você precisa estar em um carro.");
+		    
+   			new vehicleid = GetPlayerVehicleID(playerid);
+   			AddVehicleComponent(vehicleid, 1010); // x10 nitro
+   			
+            PlayerPlaySound(playerid, 1133, X, Y, Z);
+   			
+   			SendClientMessage(playerid, COLOR_GREEN, "Nitro adicionado!");
+		    return 1;
+		}
 	}
 
 	return SendClientMessage(playerid,COLOR_YELLOW,"Comando inexistente. Use /ajuda");
@@ -740,6 +794,7 @@ public OnPlayerDeath(playerid, killerid, reason)
 	//reset de variáveis
 	SetPVarInt(playerid,"Morto",1);
     SetPlayerWantedLevel(playerid, 0);
+    PlayerInfo[playerid][god] = false;
     
     //update de status
     SetPlayerScore(killerid, GetPlayerScore(killerid) + 1);
@@ -1136,6 +1191,9 @@ stock GetPlayerNameEx(playerid)
 	GetPlayerName(playerid, Naome, 24);
 	return Naome;
 }
+
+forward GetAdmin(playerid);
+public GetAdmin(playerid) return PlayerInfo[playerid][pAdmin];
 
 forward GetGodmodePlayer(playerid);
 public GetGodmodePlayer(playerid) return PlayerInfo[playerid][god];
