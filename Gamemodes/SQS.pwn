@@ -142,8 +142,8 @@ public OnPlayerConnect(playerid) {
 
 public OnPlayerDisconnect(playerid) {
     new strings[15];
-    new file[64];
     new string[128], Player_Name[MAX_PLAYER_NAME];
+    GetPlayerName(playerid,Player_Name,sizeof(Player_Name));
     
     //update usuários online
 	format(strings, 15, "%d Online",GetOnLinePlayers());
@@ -152,21 +152,19 @@ public OnPlayerDisconnect(playerid) {
 	gActivePlayers[playerid]--;
 	
 	//avisos
-    GetPlayerName(playerid,Player_Name,sizeof(Player_Name));
     format(string,256,"==> %s [Id:%i] Saiu do servidor",Player_Name,playerid); SendClientMessageToAll(ROXO,string);
 
 	//salva status
-    GetPlayerName(playerid,file,sizeof(file));
-    format(file,sizeof(file),DOF2_File(file));
-    DOF2_SetInt(file, "Kills",PlayerInfo[playerid][pKills]);
-    DOF2_SetInt(file, "Deaths",PlayerInfo[playerid][pDeaths]);
-    DOF2_SetInt(file, "Money",GetPlayerMoney(playerid));
-    DOF2_SetInt(file, "Score",GetPlayerScore(playerid));
-    DOF2_SetInt(file, "AdminLevel",PlayerInfo[playerid][pAdmin]);
-    DOF2_SetInt(file, "VipLevel",PlayerInfo[playerid][pVip]);
+    format(Player_Name,sizeof(Player_Name),DOF2_File(Player_Name));
+    DOF2_SetInt(Player_Name, "Kills",PlayerInfo[playerid][pKills]);
+    DOF2_SetInt(Player_Name, "Deaths",PlayerInfo[playerid][pDeaths]);
+    DOF2_SetInt(Player_Name, "Money",GetPlayerMoney(playerid));
+    DOF2_SetInt(Player_Name, "Score",GetPlayerScore(playerid));
+    DOF2_SetInt(Player_Name, "AdminLevel",PlayerInfo[playerid][pAdmin]);
+    DOF2_SetInt(Player_Name, "VipLevel",PlayerInfo[playerid][pVip]);
 
 
-    return 1;
+    return 0;
 }
 
 //------------------------------------------------------------------------------------------------------
@@ -590,7 +588,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     		    format(string, sizeof(string), "Você foi até %s", GetPlayerNameEx(player2));
         		SendClientMessage(playerid, COLOR_YELLOW, string);
         		GetPlayerPos(player2, pX, pY, pZ);
-        		SetPlayerPos(player2, pX+1, pY+1, pZ);
+        		SetPlayerPos(playerid, pX+1, pY+1, pZ);
         		SetPlayerInterior(playerid, GetPlayerInterior(player2));
     			}
 			return 1;
@@ -657,7 +655,7 @@ public OnPlayerSpawn(playerid)
 	TogglePlayerClock(playerid,0);
 	SetPVarInt(playerid,"Arena",0);
 	SetPVarInt(playerid,"Morto",0);
-	SetPVarInt(playerid,"TK",0);
+	//SetPVarInt(playerid,"TK",0);
 	GivePlayerWeapon(playerid,24,500);
 
     switch(pClass[playerid])
@@ -817,28 +815,31 @@ public OnPlayerDeath(playerid, killerid, reason)
 	
 	//team killing
 	if(GetPlayerColor(playerid) == GetPlayerColor(killerid)) {
-    if(GetPVarInt(killerid,"TK") <= 1) {
 		new Float:x, Float:y, Float:z;
         GetPlayerPos(playerid, x, y, z);
         SetPlayerPos(killerid, x, y, z+200);
         SendClientMessage(killerid, COLOR_RED, "TEAM KILLING É PROIBIDO, MAKAKO.");
+        
         if(GetPVarInt(killerid,"TK") == 0) {
             SendClientMessage(killerid, COLOR_RED, "PUNIÇÃO: -$1000 e -5 SCORES");
             SetPlayerScore(killerid,GetPlayerScore(killerid) - 5);
             GivePlayerMoney(killerid,-1000);
         }
+        
         if(GetPVarInt(killerid,"TK") == 1) {
             SendClientMessage(killerid, COLOR_RED, "PUNIÇÃO: -200000 -50 SCORES");
             SetPlayerScore(killerid,GetPlayerScore(killerid) - 50);
             GivePlayerMoney(killerid,-200000);
         }
-        KillingSpree[playerid] = 0;
-        SetPlayerWantedLevel(killerid,0);
-        SetPVarInt(killerid,"TK",1);
-        } else if (GetPVarInt(killerid,"TK") > 1) {
-			SendClientMessage(killerid, COLOR_RED,"Você foi kikado por cometer Team-Kill 3 vezes.");
+        
+        if(GetPVarInt(killerid,"TK") > 1) {
+            SendClientMessage(killerid, COLOR_RED,"Você foi kikado por cometer Team-Kill 3 vezes.");
 			Kick(killerid);
-		}
+        }
+        
+        KillingSpree[killerid] = 0;
+        SetPlayerWantedLevel(killerid,0);
+        SetPVarInt(killerid,"TK",GetPVarInt(killerid,"TK") + 1);
     }
     
     //killing spree
