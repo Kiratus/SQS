@@ -19,6 +19,9 @@
 #define DIALOG_REGISTER 1
 #define DIALOG_LOGIN 2
 
+#define VRESPAWN 120
+#define ULTRESPAWN 600
+
 #define NUMVALUES 4
 
 forward Givecashdelaytimer(playerid);
@@ -78,6 +81,7 @@ enum pInfo {
 	bool: god
 };
 
+new ULT[8];
 new PlayerInfo[MAX_PLAYERS][pInfo];
 
 /* //Round code stolen from mike's Manhunt :P
@@ -107,6 +111,7 @@ main()
 public OnPlayerConnect(playerid) {
     new string[128], Player_Name[MAX_PLAYER_NAME];
     new strings[15];
+    new file[64];
 
 	//reset de variáveis
     KillingSpree[playerid] = 0;
@@ -128,8 +133,8 @@ public OnPlayerConnect(playerid) {
     format(string,256,"==> %s [Id:%i] Entrou no servidor",Player_Name,playerid); SendClientMessageToAll(ROXO,string);
     
     //sistema de contas
-    format(Player_Name,sizeof(Player_Name),DOF2_File(Player_Name));
-    if(DOF2_FileExists(Player_Name)) {
+    format(file,sizeof(file),"Accs/%s.ini",Player_Name);
+    if(DOF2_FileExists(file)) {
         ShowPlayerDialog(playerid, DIALOG_LOGIN, DIALOG_STYLE_INPUT,"Seja bem-viado!","{FFFFFF}Digite sua {00FF22}SENHA {FFFFFF}para entrar","Login","Morrer");
     } else {
         ShowPlayerDialog(playerid, DIALOG_REGISTER, DIALOG_STYLE_INPUT,"Por favor, registre!","{FFFFFF}Digite sua {00FF22}SENHA {FFFFFF}para se cadastrar.","Cadastro","Morrer");
@@ -143,6 +148,7 @@ public OnPlayerConnect(playerid) {
 public OnPlayerDisconnect(playerid) {
     new strings[15];
     new string[128], Player_Name[MAX_PLAYER_NAME];
+    new file[64];
     GetPlayerName(playerid,Player_Name,sizeof(Player_Name));
     
     //update usuários online
@@ -152,16 +158,18 @@ public OnPlayerDisconnect(playerid) {
 	gActivePlayers[playerid]--;
 	
 	//avisos
-    format(string,256,"==> %s [Id:%i] Saiu do servidor",Player_Name,playerid); SendClientMessageToAll(ROXO,string);
+    format(string,256,"<== %s [Id:%i] Saiu do servidor",Player_Name,playerid); SendClientMessageToAll(ROXO,string);
 
 	//salva status
-    format(Player_Name,sizeof(Player_Name),DOF2_File(Player_Name));
-    DOF2_SetInt(Player_Name, "Kills",PlayerInfo[playerid][pKills]);
-    DOF2_SetInt(Player_Name, "Deaths",PlayerInfo[playerid][pDeaths]);
-    DOF2_SetInt(Player_Name, "Money",GetPlayerMoney(playerid));
-    DOF2_SetInt(Player_Name, "Score",GetPlayerScore(playerid));
-    DOF2_SetInt(Player_Name, "AdminLevel",PlayerInfo[playerid][pAdmin]);
-    DOF2_SetInt(Player_Name, "VipLevel",PlayerInfo[playerid][pVip]);
+    format(file,sizeof(file),"Accs/%s.ini",Player_Name);
+    DOF2_SetInt(file, "Kills",PlayerInfo[playerid][pKills]);
+    DOF2_SetInt(file, "Deaths",PlayerInfo[playerid][pDeaths]);
+    DOF2_SetInt(file, "Money",GetPlayerMoney(playerid));
+    DOF2_SetInt(file, "Score",GetPlayerScore(playerid));
+    DOF2_SetInt(file, "AdminLevel",PlayerInfo[playerid][pAdmin]);
+    DOF2_SetInt(file, "VipLevel",PlayerInfo[playerid][pVip]);
+    
+    DOF2_SaveFile();
 
 
     return 0;
@@ -175,9 +183,9 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[]) {
             if(!response) Kick(playerid);
             if(!strlen(inputtext)) return ShowPlayerDialog(playerid, DIALOG_REGISTER, DIALOG_STYLE_INPUT,"Por favor, registre!","{FFFFFF}Digite aqui a sua {00FF22}SENHA {FFFFFF}para se cadastrar.","Cadastrar","Morrer");
             if(response) {
-                new file[64];
-                GetPlayerName(playerid,file,sizeof(file));
-                format(file,sizeof(file),DOF2_File(file));
+                new file[64], Player_Name[MAX_PLAYER_NAME];
+                GetPlayerName(playerid,Player_Name,sizeof(Player_Name));
+                format(file,sizeof(file),"Accs/%s.ini",Player_Name);
                 DOF2_CreateFile(file, inputtext);
                 DOF2_SetInt(file, "Kills", 0);
                 DOF2_SetInt(file, "Deaths", 0); 
@@ -185,15 +193,16 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[]) {
                 DOF2_SetInt(file, "Score", 0);
                 DOF2_SetInt(file, "AdminLevel", 0);
 				DOF2_SetInt(file, "VipLevel", 0);
+				GivePlayerMoney(playerid, 1000);
                 DOF2_SaveFile(); 
             }
         }
         case DIALOG_LOGIN: { //carrega arquivo de conta
             if(!response) Kick(playerid);
             if(response) {
-                new file[64];
-                GetPlayerName(playerid,file,sizeof(file));
-                format(file,sizeof(file),DOF2_File(file));
+                new file[64], Player_Name[MAX_PLAYER_NAME];
+                GetPlayerName(playerid,Player_Name,sizeof(Player_Name));
+                format(file,sizeof(file),"Accs/%s.ini",Player_Name);
                 if(DOF2_FileExists(file)) {
                     if(DOF2_CheckLogin(file,inputtext)) {
                         PlayerInfo[playerid][pKills] = DOF2_GetInt(file,"Kills");
@@ -488,7 +497,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 	    }
 	    //-----------------------------------------------------------
 		if(strcmp(cmd, "/promover", true) == 0) {
-		    if (PlayerInfo[playerid][pAdmin] < 3 || !IsPlayerAdmin(playerid)) return SendClientMessage(playerid, COLOR_YELLOW, "NO ENOUGH LEVEL, STRANGER!");
+		    if (PlayerInfo[playerid][pAdmin] < 3 && !IsPlayerAdmin(playerid)) return SendClientMessage(playerid, COLOR_YELLOW, "NO ENOUGH LEVEL, STRANGER!");
 		
   			new tmp[256], player2, level;
 			tmp = strtok(cmdtext, idx);
@@ -599,7 +608,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 	if(PlayerInfo[playerid][pVip] == 1 || PlayerInfo[playerid][pAdmin] >= 3) { //comandos VIP
 	
         if(strcmp(cmd, "/vip", true) == 0) {
-		    if (PlayerInfo[playerid][pAdmin] < 5 || !IsPlayerAdmin(playerid)) return SendClientMessage(playerid, COLOR_YELLOW, "NO ENOUGH LEVEL, STRANGER!");
+		    if (PlayerInfo[playerid][pAdmin] < 3 && !IsPlayerAdmin(playerid)) return SendClientMessage(playerid, COLOR_YELLOW, "NO ENOUGH LEVEL, STRANGER!");
 
   			new tmp[256], player2, level;
 			tmp = strtok(cmdtext, idx);
@@ -807,7 +816,7 @@ public OnPlayerDeath(playerid, killerid, reason)
 	SendDeathMessage(killerid, playerid, reason);
 	new Float:Health;
 	GetPlayerHealth(killerid, Health);
-	if(Health <= 80)
+	if(Health <= 80 && !PlayerInfo[playerid][god])
 	{
     	SetPlayerHealth(killerid, Health + 20);
     	SendClientMessage(killerid,COLOR_WHITE,"Você tinha menos que 80 de vida, e ganhou 20!");
@@ -1026,106 +1035,115 @@ public OnGameModeInit()
     AddPlayerClass(211,2508.1372,-1656.6781,13.5938,129.4222,0,0,0,0,0,0); // Class 14 Roxo
     AddPlayerClass(169,2508.1372,-1656.6781,13.5938,129.4222,0,0,0,0,0,0); // Class 15 Roxo
 
-	// Base vermelha
+	// Base roxa
 
-	AddStaticVehicle(411,390.748,2541.178,16.059,180.000,211,149);
-	AddStaticVehicle(411,385.748,2541.178,16.059,180.000,211,149);
-	AddStaticVehicle(411,380.748,2541.178,16.059,180.000,211,149);
-	AddStaticVehicle(411,375.748,2541.178,16.059,180.000,211,149);
-	AddStaticVehicle(411,370.748,2541.178,16.059,180.000,211,149);
-	AddStaticVehicle(411,365.748,2541.178,16.059,180.000,211,149);
-	AddStaticVehicle(411,360.748,2541.178,16.059,180.000,211,149);
-	AddStaticVehicle(411,355.748,2541.178,16.059,180.000,211,149);
-	AddStaticVehicle(411,350.748,2541.178,16.059,180.000,211,149);
-	AddStaticVehicle(411,345.748,2541.178,16.059,180.000,211,149);
-	AddStaticVehicle(487,365.059,2466.570,16.211,0.000,211,1);
-	AddStaticVehicle(487,340.059,2466.570,16.211,0.000,211,1);
-	AddStaticVehicle(522,418.189,2531.904,16.319,180.000,211,1);
-	AddStaticVehicle(522,420.189,2531.904,16.319,180.000,211,1);
-	AddStaticVehicle(522,422.189,2531.904,16.319,180.000,211,1);
-	AddStaticVehicle(522,424.189,2531.904,16.319,180.000,211,1);
-	AddStaticVehicle(522,426.189,2531.904,16.319,180.000,211,1);
+	AddStaticVehicleEx(411,390.748,2541.178,16.059,180.000,211,149,VRESPAWN);
+	AddStaticVehicleEx(411,385.748,2541.178,16.059,180.000,211,149,VRESPAWN);
+	AddStaticVehicleEx(411,380.748,2541.178,16.059,180.000,211,149,VRESPAWN);
+	AddStaticVehicleEx(411,375.748,2541.178,16.059,180.000,211,149,VRESPAWN);
+	AddStaticVehicleEx(411,370.748,2541.178,16.059,180.000,211,149,VRESPAWN);
+	AddStaticVehicleEx(411,365.748,2541.178,16.059,180.000,211,149,VRESPAWN);
+	AddStaticVehicleEx(411,360.748,2541.178,16.059,180.000,211,149,VRESPAWN);
+	AddStaticVehicleEx(411,355.748,2541.178,16.059,180.000,211,149,VRESPAWN);
+	AddStaticVehicleEx(411,350.748,2541.178,16.059,180.000,211,149,VRESPAWN);
+	AddStaticVehicleEx(411,345.748,2541.178,16.059,180.000,211,149,VRESPAWN);
+	AddStaticVehicleEx(487,365.059,2466.570,16.211,0.000,211,1,VRESPAWN);
+	AddStaticVehicleEx(487,340.059,2466.570,16.211,0.000,211,1,VRESPAWN);
+	AddStaticVehicleEx(522,418.189,2531.904,16.319,180.000,211,1,VRESPAWN);
+	AddStaticVehicleEx(522,420.189,2531.904,16.319,180.000,211,1,VRESPAWN);
+	AddStaticVehicleEx(522,422.189,2531.904,16.319,180.000,211,1,VRESPAWN);
+	AddStaticVehicleEx(522,424.189,2531.904,16.319,180.000,211,1,VRESPAWN);
+	AddStaticVehicleEx(522,426.189,2531.904,16.319,180.000,211,1,VRESPAWN);
 
 
 	// Base azul
 
-	AddStaticVehicle(522,-177.707,1225.307,19.469,270.000,79,79);
-	AddStaticVehicle(522,-177.707,1222.307,19.469,270.000,79,79);
-	AddStaticVehicle(522,-177.707,1219.307,19.469,270.000,79,79);
-	AddStaticVehicle(522,-177.707,1216.307,19.469,270.000,79,79);
-	AddStaticVehicle(522,-177.707,1213.307,19.469,270.000,79,79);
-	AddStaticVehicle(402,-158.171,1229.100,19.469,180.000,79,79);
-	AddStaticVehicle(415,-163.171,1229.100,19.469,180.000,79,79);
-	AddStaticVehicle(424,-168.171,1229.100,19.469,180.000,79,79);
-	AddStaticVehicle(429,-134.379,1217.458,19.469,180.000,79,79);
-	AddStaticVehicle(439,-139.379,1217.458,19.469,180.000,79,79);
-	AddStaticVehicle(451,-144.379,1217.458,19.469,180.000,79,79);
-	AddStaticVehicle(477,-149.379,1217.458,19.469,180.000,79,79);
+	AddStaticVehicleEx(522,-177.707,1225.307,19.469,270.000,79,79,VRESPAWN);
+	AddStaticVehicleEx(522,-177.707,1222.307,19.469,270.000,79,79,VRESPAWN);
+	AddStaticVehicleEx(522,-177.707,1219.307,19.469,270.000,79,79,VRESPAWN);
+	AddStaticVehicleEx(522,-177.707,1216.307,19.469,270.000,79,79,VRESPAWN);
+	AddStaticVehicleEx(522,-177.707,1213.307,19.469,270.000,79,79,VRESPAWN);
+	AddStaticVehicleEx(402,-158.171,1229.100,19.469,180.000,79,79,VRESPAWN);
+	AddStaticVehicleEx(415,-163.171,1229.100,19.469,180.000,79,79,VRESPAWN);
+	AddStaticVehicleEx(424,-168.171,1229.100,19.469,180.000,79,79,VRESPAWN);
+	AddStaticVehicleEx(429,-134.379,1217.458,19.469,180.000,79,79,VRESPAWN);
+	AddStaticVehicleEx(439,-139.379,1217.458,19.469,180.000,79,79,VRESPAWN);
+	AddStaticVehicleEx(451,-144.379,1217.458,19.469,180.000,79,79,VRESPAWN);
+	AddStaticVehicleEx(477,-149.379,1217.458,19.469,180.000,79,79,VRESPAWN);
+
+	// Base vermelha
+
+	AddStaticVehicleEx(522,730.545,1949.693,5.103,180.000,1,3,VRESPAWN);
+	AddStaticVehicleEx(522,726.545,1949.693,5.103,180.000,3,3,VRESPAWN);
+	AddStaticVehicleEx(402,721.664,1949.693,5.103,180.000,3,3,VRESPAWN);
+	AddStaticVehicleEx(415,716.230,1949.693,5.103,180.000,3,3,VRESPAWN);
+	AddStaticVehicleEx(424,711.663,1949.693,5.103,180.000,3,3,VRESPAWN);
+	AddStaticVehicleEx(429,706.816,1949.693,5.103,180.000,3,3,VRESPAWN);
+	AddStaticVehicleEx(522,701.105,1949.693,5.103,180.000,3,3,VRESPAWN);
+	AddStaticVehicleEx(522,696.453,1949.693,5.103,180.000,3,3,VRESPAWN);
+	AddStaticVehicleEx(439,691.637,1949.693,5.103,180.000,3,3,VRESPAWN);
+	AddStaticVehicleEx(451,686.793,1949.693,5.103,180.000,3,3,VRESPAWN);
+	AddStaticVehicleEx(477,681.548,1949.693,5.103,180.000,3,3,VRESPAWN);
+	AddStaticVehicleEx(522,676.445,1949.693,5.103,180.000,3,3,VRESPAWN);
 
 	// Base policia
 
-	AddStaticVehicle(522,730.545,1949.693,5.103,180.000,3,3);
-	AddStaticVehicle(522,726.545,1949.693,5.103,180.000,3,3);
-	AddStaticVehicle(402,721.664,1949.693,5.103,180.000,3,3);
-	AddStaticVehicle(415,716.230,1949.693,5.103,180.000,3,3);
-	AddStaticVehicle(424,711.663,1949.693,5.103,180.000,3,3);
-	AddStaticVehicle(429,706.816,1949.693,5.103,180.000,3,3);
-	AddStaticVehicle(522,701.105,1949.693,5.103,180.000,3,3);
-	AddStaticVehicle(522,696.453,1949.693,5.103,180.000,3,3);
-	AddStaticVehicle(439,691.637,1949.693,5.103,180.000,3,3);
-	AddStaticVehicle(451,686.793,1949.693,5.103,180.000,3,3);
-	AddStaticVehicle(477,681.548,1949.693,5.103,180.000,3,3);
-	AddStaticVehicle(522,676.445,1949.693,5.103,180.000,3,3);
-
-	// Base roxa
-
-	AddStaticVehicle(523,-527.113,2579.040,52.984,90.000,11,11); // HPV 1000
-	AddStaticVehicle(523,-527.113,581.454,52.984,90.000,11,11); // HPV 1000
-	AddStaticVehicle(523,-527.113,2576.397,52.984,90.000,11,11); // HPV 1000
-	AddStaticVehicle(523,-527.113,2573.866,52.984,90.000,11,11); // HPV 1000
-	AddStaticVehicle(523,-527.113,2571.356,52.984,90.000,11,11); // HPV 1000
-	AddStaticVehicle(598,-529.922,2563.687,52.979,90.000,11,11); // LVPD
-	AddStaticVehicle(598,-529.992,2558.218,52.979,90.000,11,11); // LVPD
-	AddStaticVehicle(598,-521.068,2559.008,52.978,270.000,11,11); // LVPD
-	AddStaticVehicle(598,-521.068,2564.219,52.979,270.000,11,11); // LVPD
-	AddStaticVehicle(598,-521.068,2569.458,52.979,270.000,11,11); // LVPD
-	AddStaticVehicle(528,-519.800,2577.061,52.985,270.000,11,11); // FBI
-	AddStaticVehicle(528,-519.800,2582.120,52.985,270.000,11,11); // FBI
-	AddStaticVehicle(470,-538.258,2603.697,52.980,270.000,11,11); // Patriot
-	AddStaticVehicle(470,-538.258,2608.662,52.980,270.000,11,11); // Patriot
-	AddStaticVehicle(470,-538.258,2613.509,52.980,270.000,11,11); // Patriot
-	AddStaticVehicle(470,-538.258,2618.340,52.980,270.000,11,11); // Patriot
-	AddStaticVehicle(470,-538.258,2623.540,52.980,270.000,11,11); // Patriot
-	AddStaticVehicle(497,-510.126,2632.243,52.979,90.000,11,11); // Heli
-	AddStaticVehicle(497,-511.969,2605.545,52.980,90.000,11,11); // Heli
+	AddStaticVehicleEx(523,-527.113,2579.040,52.984,90.000,11,11,VRESPAWN); // HPV 1000
+	AddStaticVehicleEx(523,-527.113,581.454,52.984,90.000,11,11,VRESPAWN); // HPV 1000
+	AddStaticVehicleEx(523,-527.113,2576.397,52.984,90.000,11,11,VRESPAWN); // HPV 1000
+	AddStaticVehicleEx(523,-527.113,2573.866,52.984,90.000,11,11,VRESPAWN); // HPV 1000
+	AddStaticVehicleEx(523,-527.113,2571.356,52.984,90.000,11,11,VRESPAWN); // HPV 1000
+	AddStaticVehicleEx(598,-529.922,2563.687,52.979,90.000,11,11,VRESPAWN); // LVPD
+	AddStaticVehicleEx(598,-529.992,2558.218,52.979,90.000,11,11,VRESPAWN); // LVPD
+	AddStaticVehicleEx(598,-521.068,2559.008,52.978,270.000,11,11,VRESPAWN); // LVPD
+	AddStaticVehicleEx(598,-521.068,2564.219,52.979,270.000,11,11,VRESPAWN); // LVPD
+	AddStaticVehicleEx(598,-521.068,2569.458,52.979,270.000,11,11,VRESPAWN); // LVPD
+	AddStaticVehicleEx(528,-519.800,2577.061,52.985,270.000,11,11,VRESPAWN); // FBI
+	AddStaticVehicleEx(528,-519.800,2582.120,52.985,270.000,11,11,VRESPAWN); // FBI
+	AddStaticVehicleEx(470,-538.258,2603.697,52.980,270.000,11,11,VRESPAWN); // Patriot
+	AddStaticVehicleEx(470,-538.258,2608.662,52.980,270.000,11,11,VRESPAWN); // Patriot
+	AddStaticVehicleEx(470,-538.258,2613.509,52.980,270.000,11,11,VRESPAWN); // Patriot
+	AddStaticVehicleEx(470,-538.258,2618.340,52.980,270.000,11,11,VRESPAWN); // Patriot
+	AddStaticVehicleEx(470,-538.258,2623.540,52.980,270.000,11,11,VRESPAWN); // Patriot
+	AddStaticVehicleEx(497,-510.126,2632.243,52.979,90.000,11,11,VRESPAWN); // Heli
+	AddStaticVehicleEx(497,-511.969,2605.545,52.980,90.000,11,11,VRESPAWN); // Heli
 
 	// Carros espalhados
 
-    AddStaticVehicle(568,9.2662,1231.0234,18.9078,89.6072,1,1); //
-	AddStaticVehicle(424,16.2422,1166.0085,19.1346,0.1662,2,2); //
-	AddStaticVehicle(495,18.4716,1353.1819,8.7386,23.3455,3,3); //
-	AddStaticVehicle(505,-34.4963,1377.6820,8.8819,141.9388,4,4); //
-	AddStaticVehicle(403,-100.1622,1380.6021,9.8428,105.4320,5,5); //
-	AddStaticVehicle(413,-89.2076,1535.0980,16.1564,35.0308,6,6); //
-	AddStaticVehicle(421,-165.2876,1676.9580,14.3540,19.4646,7,7); //
-	AddStaticVehicle(422,-57.6921,1841.9924,17.1237,74.9541,8,8); //
-	AddStaticVehicle(426,-231.4026,2042.8424,28.7066,347.3830,9,9); //
-	AddStaticVehicle(434,-38.0279,2236.6855,37.8787,309.6378,10,10); //
-	AddStaticVehicle(463,-22.2527,2333.0918,23.7102,5.7975,11,11); //
-	AddStaticVehicle(471,-241.0324,2595.2539,62.2753,358.2202,12,12); //
-	AddStaticVehicle(568,-204.4339,2595.8342,62.2612,358.0206,13,13); //
-	AddStaticVehicle(424,-223.0472,2770.4795,62.2559,179.0655,14,14); //
-	AddStaticVehicle(495,-275.9200,2718.8606,62.1983,6.1004,15,15); //
-	AddStaticVehicle(505,-600.7001,2701.3452,71.8574,115.1483,16,16); //
-	AddStaticVehicle(413,-682.1919,2705.9470,69.1983,147.5775,17,17); //
-	AddStaticVehicle(403,-767.0948,2760.2974,45.3398,180.6232,18,18); //
-	AddStaticVehicle(421,-840.2679,2742.2256,45.3325,183.0326,19,19); //
-	AddStaticVehicle(422,-1316.2272,2696.1790,49.6391,118.6256,20,20); //
-	AddStaticVehicle(426,-1399.9670,2640.6926,55.2526,85.5841,21,21); //
-	AddStaticVehicle(434,-1401.2579,2656.4988,55.2537,86.8121,22,22); //
-	AddStaticVehicle(463,-1506.9604,2525.9380,55.2563,0.3813,23,23); //
-	AddStaticVehicle(471,-1526.2809,2638.7605,55.3870,96.9867,24,24); //
+    AddStaticVehicleEx(568,9.2662,1231.0234,18.9078,89.6072,1,1,VRESPAWN); //
+	AddStaticVehicleEx(424,16.2422,1166.0085,19.1346,0.1662,2,2,VRESPAWN); //
+	AddStaticVehicleEx(495,18.4716,1353.1819,8.7386,23.3455,3,3,VRESPAWN); //
+	AddStaticVehicleEx(505,-34.4963,1377.6820,8.8819,141.9388,4,4,VRESPAWN); //
+	AddStaticVehicleEx(403,-100.1622,1380.6021,9.8428,105.4320,5,5,VRESPAWN); //
+	AddStaticVehicleEx(413,-89.2076,1535.0980,16.1564,35.0308,6,6,VRESPAWN); //
+	AddStaticVehicleEx(421,-165.2876,1676.9580,14.3540,19.4646,7,7,VRESPAWN); //
+	AddStaticVehicleEx(422,-57.6921,1841.9924,17.1237,74.9541,8,8,VRESPAWN); //
+	AddStaticVehicleEx(426,-231.4026,2042.8424,28.7066,347.3830,9,9,VRESPAWN); //
+	AddStaticVehicleEx(434,-38.0279,2236.6855,37.8787,309.6378,10,10,VRESPAWN); //
+	AddStaticVehicleEx(463,-22.2527,2333.0918,23.7102,5.7975,11,11,VRESPAWN); //
+	AddStaticVehicleEx(471,-241.0324,2595.2539,62.2753,358.2202,12,12,VRESPAWN); //
+	AddStaticVehicleEx(568,-204.4339,2595.8342,62.2612,358.0206,13,13,VRESPAWN); //
+	AddStaticVehicleEx(424,-223.0472,2770.4795,62.2559,179.0655,14,14,VRESPAWN); //
+	AddStaticVehicleEx(495,-275.9200,2718.8606,62.1983,6.1004,15,15,VRESPAWN); //
+	AddStaticVehicleEx(505,-600.7001,2701.3452,71.8574,115.1483,16,16,VRESPAWN); //
+	AddStaticVehicleEx(413,-682.1919,2705.9470,69.1983,147.5775,17,17,VRESPAWN); //
+	AddStaticVehicleEx(403,-767.0948,2760.2974,45.3398,180.6232,18,18,VRESPAWN); //
+	AddStaticVehicleEx(421,-840.2679,2742.2256,45.3325,183.0326,19,19,VRESPAWN); //
+	AddStaticVehicleEx(422,-1316.2272,2696.1790,49.6391,118.6256,20,20,VRESPAWN); //
+	AddStaticVehicleEx(426,-1399.9670,2640.6926,55.2526,85.5841,21,21,VRESPAWN); //
+	AddStaticVehicleEx(434,-1401.2579,2656.4988,55.2537,86.8121,22,22,VRESPAWN); //
+	AddStaticVehicleEx(463,-1506.9604,2525.9380,55.2563,0.3813,23,23,VRESPAWN); //
+	AddStaticVehicleEx(471,-1526.2809,2638.7605,55.3870,96.9867,24,24,VRESPAWN); //
 
+	//veículos ultimate
+	ULT[0] = CreateVehicle(520,713.718,1914.857,6.257,180.343,0,0,ULTRESPAWN);
+	ULT[1] = CreateVehicle(432,678.759,1934.412,5.555,270.479,0,0,ULTRESPAWN);
+	ULT[2] = CreateVehicle(520,-145.799,1181.259,20.474,90.328,0,0,ULTRESPAWN);
+	ULT[3] = CreateVehicle(432,-145.360,1205.197,19.668,268.878,43,0,ULTRESPAWN);
+	ULT[4] = CreateVehicle(520,-501.372,2579.333,54.282,357.486,0,0,ULTRESPAWN);
+	ULT[5] = CreateVehicle(432,-501.697,2604.585,53.632,177.447,43,0,ULTRESPAWN);
+	ULT[6] = CreateVehicle(520,325.099,2538.880,17.527,178.709,0,0,ULTRESPAWN);
+	ULT[7] = CreateVehicle(432,291.4309,2539.1721,16.8295,180.2851,43,0,ULTRESPAWN);
 
 	return 1;
 }
@@ -1155,6 +1173,26 @@ public SendAllFormattedText(playerid, const str[], define)
 	new tmpbuf[256];
 	format(tmpbuf, sizeof(tmpbuf), str, define);
 	SendClientMessageToAll(0xFFFF00AA, tmpbuf);
+}
+
+public OnPlayerExitVehicle(playerid, vehicleid)
+{
+	new veiculo;
+	new especial = false;
+	
+	for(new i = 0; i < 8; i++){
+	    if(vehicleid == ULT[i]){
+			veiculo = i;
+			especial = true;
+		}
+	}
+	
+	if(!especial) return 1;
+
+    SetTimerEx("vehicleRespawn", ULTRESPAWN*1000, false, "i", veiculo);
+    DestroyVehicle(vehicleid);
+    
+    return 1;
 }
 
 strtok(const string[], &index)
@@ -1198,3 +1236,18 @@ public GetAdmin(playerid) return PlayerInfo[playerid][pAdmin];
 
 forward GetGodmodePlayer(playerid);
 public GetGodmodePlayer(playerid) return PlayerInfo[playerid][god];
+
+forward vehicleRespawn(veiculo);
+public vehicleRespawn(veiculo)
+{
+	if(veiculo == 0) ULT[0] = CreateVehicle(520,713.718,1914.857,6.257,180.343,0,0,ULTRESPAWN);
+	if(veiculo == 1) ULT[1] = CreateVehicle(432,678.759,1934.412,5.555,270.479,0,0,ULTRESPAWN);
+	if(veiculo == 2) ULT[2] = CreateVehicle(520,-145.799,1181.259,20.474,90.328,0,0,ULTRESPAWN);
+	if(veiculo == 3) ULT[3] = CreateVehicle(432,-145.360,1205.197,19.668,268.878,43,0,ULTRESPAWN);
+	if(veiculo == 4) ULT[4] = CreateVehicle(520,-501.372,2579.333,54.282,357.486,0,0,ULTRESPAWN);
+	if(veiculo == 5) ULT[5] = CreateVehicle(432,-501.697,2604.585,53.632,177.447,43,0,ULTRESPAWN);
+	if(veiculo == 6) ULT[6] = CreateVehicle(520,325.099,2538.880,17.527,178.709,0,0,ULTRESPAWN);
+	if(veiculo == 7) ULT[7] = CreateVehicle(432,291.4309,2539.1721,16.8295,180.2851,43,0,ULTRESPAWN);
+	
+    return 1;
+}
