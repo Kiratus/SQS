@@ -82,6 +82,7 @@ enum pInfo {
 };
 
 new ULT[8];
+new pUltVeh[MAX_PLAYERS] = false, pUltVehID[MAX_PLAYERS];
 new PlayerInfo[MAX_PLAYERS][pInfo];
 
 /* //Round code stolen from mike's Manhunt :P
@@ -119,6 +120,7 @@ public OnPlayerConnect(playerid) {
     gActivePlayers[playerid]++;
     SetPVarInt(playerid,"TK",0);
     PlayerInfo[playerid][god] = false;
+    pUltVeh[playerid] = false;
     
     //contador de usuários ativos
 	format(strings, 15, "%d Online",GetOnLinePlayers());
@@ -793,10 +795,27 @@ public SetPlayerRandomSpawn(playerid)
 
 public OnPlayerDeath(playerid, killerid, reason)
 {
+    print("Player morreu");
     new Player_Name[MAX_PLAYER_NAME], Player_Name2[MAX_PLAYER_NAME];
     new string[64];
+    new veiculo, especial = false;
     GetPlayerName(killerid,Player_Name,sizeof(Player_Name));
     GetPlayerName(playerid,Player_Name2,sizeof(Player_Name2));
+    
+    //Sistema carro ult
+    if(pUltVeh[playerid]){
+        for(new i = 0; i < 8; i++){
+	    	if(pUltVehID[playerid] == ULT[i]){
+				veiculo = i;
+				especial = true;
+				pUltVeh[playerid] = false;
+			}
+		}
+		if(especial){
+			SetTimerEx("vehicleRespawn", ULTRESPAWN*1000, false, "i", veiculo);
+    		DestroyVehicle(pUltVehID[playerid]);
+		}
+	} //precisa ficar no topo pois deve ser processado muito rápido (antes do client retornar que o jogador morreu)
     
 	//reset de variáveis
 	SetPVarInt(playerid,"Morto",1);
@@ -902,38 +921,38 @@ public OnPlayerDeath(playerid, killerid, reason)
    	    GivePlayerMoney(killerid,2000);
    	    SetPlayerScore(killerid, GetPlayerScore(killerid) + 2);
    	}
-   	if(KillingSpree[playerid] >= 5 && KillingSpree[playerid] < 7) {
+   	else if(KillingSpree[playerid] < 7) {
    	    format(string,256,"%s (ID: %i) foi neutralizado por %s (ID: %i). Recompensa ($3000 + 4 score).",Player_Name2,playerid,Player_Name,killerid);
 	   	SendClientMessageToAll(COLOR_RED,string);
    	    GivePlayerMoney(killerid,3000);
    	    SetPlayerScore(killerid, GetPlayerScore(killerid) + 4);
    	}
-   	if(KillingSpree[playerid] >= 7 && KillingSpree[playerid] < 10) {
+   	else if(KillingSpree[playerid] < 10) {
    	    format(string,256,"%s (ID: %i) foi neutralizado por %s (ID: %i). Recompensa ($5000 + 6 score).",Player_Name2,playerid,Player_Name,killerid);
 	   	SendClientMessageToAll(COLOR_RED,string);
    	    GivePlayerMoney(killerid,5000);
    	    SetPlayerScore(killerid, GetPlayerScore(killerid) + 6);
    	}
-   	if(KillingSpree[playerid] >= 10 && KillingSpree[playerid] < 15) {
+   	else if(KillingSpree[playerid] < 15) {
    	    format(string,256,"%s (ID: %i) foi neutralizado por %s (ID: %i). Recompensa ($10000 + 10 score).",Player_Name2,playerid,Player_Name,killerid);
    		SendClientMessageToAll(COLOR_RED,string);
    	    GivePlayerMoney(killerid,10000);
    	    SetPlayerScore(killerid, GetPlayerScore(killerid) + 10);
    	}
-   	if(KillingSpree[playerid] >= 15 && KillingSpree[playerid] < 20) {
+   	else if(KillingSpree[playerid] < 20) {
    	    format(string,256,"%s (ID: %i) foi neutralizado por %s (ID: %i). Recompensa ($20000 + 20 score).",Player_Name2,playerid,Player_Name,killerid);
    		SendClientMessageToAll(COLOR_RED,string);
    	    GivePlayerMoney(killerid,20000);
    	    SetPlayerScore(killerid, GetPlayerScore(killerid) + 20);
    	}
-   	if(KillingSpree[playerid] >= 20) {
+   	else if(KillingSpree[playerid] >= 20) {
    	    format(string,256,"%s (ID: %i) foi neutralizado por %s (ID: %i). Recompensa ($1000000 + 100 score).",Player_Name2,playerid,Player_Name,killerid);
 	   	SendClientMessageToAll(COLOR_RED,string);
    	    GivePlayerMoney(killerid,1000000);
    	    SetPlayerScore(killerid, GetPlayerScore(killerid) + 100);
    	}
-    
     KillingSpree[playerid] = 0; //não ta no reset pq se ficasse no topo ia zuar o sistema de recompensa =C
+	
     return 1;
 
 }
@@ -1175,6 +1194,56 @@ public SendAllFormattedText(playerid, const str[], define)
 	SendClientMessageToAll(0xFFFF00AA, tmpbuf);
 }
 
+public OnPlayerEnterVehicle(playerid, vehicleid, ispassenger)
+{
+	new caradress;
+	new especial = false;
+	for(new i = 0; i < 8; i++){
+	    if(vehicleid == ULT[i]){
+			caradress = i;
+            pUltVeh[playerid] = true;
+            pUltVehID[playerid] = vehicleid;
+            especial = true;
+		}
+	}
+	if(especial){
+		if(caradress == 0 || caradress == 1){
+		    if(GetPlayerColor(playerid) != 0xFF0000AA){
+		        SendClientMessageToAll(COLOR_RED,"Um veículo ultimate da equipe VERMELHA foi destruído por um jogador rival");
+		        SetTimerEx("vehicleRespawn", ULTRESPAWN*1000, false, "i", caradress);
+	    		DestroyVehicle(vehicleid);
+	    		pUltVeh[playerid] = false;
+		    }
+		}
+		else if(caradress == 2 || caradress == 3){
+	 	   if(GetPlayerColor(playerid) != 0x2641FEAA){
+		        SendClientMessageToAll(COLOR_BLUE,"Um veículo ultimate da equipe AZUL foi destruído por um jogador rival");
+		        SetTimerEx("vehicleRespawn", ULTRESPAWN*1000, false, "i", caradress);
+	    		DestroyVehicle(vehicleid);
+	    		pUltVeh[playerid] = false;
+		    }
+		}
+	    else if(caradress == 4 || caradress == 5){
+	 	   if(GetPlayerColor(playerid) != 0xFAFAFAA){
+		        SendClientMessageToAll(COLOR_GREEN,"Um veículo ultimate dos  POLICIAIS foi destruído por um jogador rival");
+		        SetTimerEx("vehicleRespawn", ULTRESPAWN*1000, false, "i", caradress);
+	    		DestroyVehicle(vehicleid);
+	    		pUltVeh[playerid] = false;
+		    }
+		}
+	    else if(caradress == 6 || caradress == 7){
+	 	   if(GetPlayerColor(playerid) != ROXO){
+		        SendClientMessageToAll(ROXO,"Um veículo ultimate da equipe ROXA foi destruído por um jogador rival");
+		        SetTimerEx("vehicleRespawn", ULTRESPAWN*1000, false, "i", caradress);
+	    		DestroyVehicle(vehicleid);
+	    		pUltVeh[playerid] = false;
+		    }
+		}
+	}
+	
+    return 1;
+}
+
 public OnPlayerExitVehicle(playerid, vehicleid)
 {
 	new veiculo;
@@ -1191,6 +1260,7 @@ public OnPlayerExitVehicle(playerid, vehicleid)
 
     SetTimerEx("vehicleRespawn", ULTRESPAWN*1000, false, "i", veiculo);
     DestroyVehicle(vehicleid);
+    pUltVeh[playerid] = false;
     
     return 1;
 }
@@ -1240,14 +1310,38 @@ public GetGodmodePlayer(playerid) return PlayerInfo[playerid][god];
 forward vehicleRespawn(veiculo);
 public vehicleRespawn(veiculo)
 {
-	if(veiculo == 0) ULT[0] = CreateVehicle(520,713.718,1914.857,6.257,180.343,0,0,ULTRESPAWN);
-	if(veiculo == 1) ULT[1] = CreateVehicle(432,678.759,1934.412,5.555,270.479,0,0,ULTRESPAWN);
-	if(veiculo == 2) ULT[2] = CreateVehicle(520,-145.799,1181.259,20.474,90.328,0,0,ULTRESPAWN);
-	if(veiculo == 3) ULT[3] = CreateVehicle(432,-145.360,1205.197,19.668,268.878,43,0,ULTRESPAWN);
-	if(veiculo == 4) ULT[4] = CreateVehicle(520,-501.372,2579.333,54.282,357.486,0,0,ULTRESPAWN);
-	if(veiculo == 5) ULT[5] = CreateVehicle(432,-501.697,2604.585,53.632,177.447,43,0,ULTRESPAWN);
-	if(veiculo == 6) ULT[6] = CreateVehicle(520,325.099,2538.880,17.527,178.709,0,0,ULTRESPAWN);
-	if(veiculo == 7) ULT[7] = CreateVehicle(432,291.4309,2539.1721,16.8295,180.2851,43,0,ULTRESPAWN);
+	if(veiculo == 0){ //hydra vermelho
+		ULT[0] = CreateVehicle(520,713.718,1914.857,6.257,180.343,0,0,ULTRESPAWN);
+		SendClientMessageToAll(COLOR_RED,"Hydra da equipe vermelha renasceu");
+	}
+	else if(veiculo == 1){ //rhino vermelho
+		ULT[1] = CreateVehicle(432,678.759,1934.412,5.555,270.479,0,0,ULTRESPAWN);
+		SendClientMessageToAll(COLOR_RED,"Rhino da equipe vermelha renasceu");
+	}
+	else if(veiculo == 2){ //hydra azul
+		ULT[2] = CreateVehicle(520,-145.799,1181.259,20.474,90.328,0,0,ULTRESPAWN);
+		SendClientMessageToAll(COLOR_BLUE,"Hydra da equipe azul renasceu");
+	}
+	else if(veiculo == 3){ //rhino azul
+		ULT[3] = CreateVehicle(432,-145.360,1205.197,19.668,268.878,43,0,ULTRESPAWN);
+		SendClientMessageToAll(COLOR_BLUE,"Rhino da equipe azul renasceu");
+	}
+	else if(veiculo == 4){ //hydra policia
+		ULT[4] = CreateVehicle(520,-501.372,2579.333,54.282,357.486,0,0,ULTRESPAWN);
+		SendClientMessageToAll(COLOR_GREEN,"Hydra dos policiais renasceu");
+	}
+	else if(veiculo == 5){ //rhino policia
+		ULT[5] = CreateVehicle(432,-501.697,2604.585,53.632,177.447,43,0,ULTRESPAWN);
+		SendClientMessageToAll(COLOR_GREEN,"Rhino dos policiais renasceu");
+	}
+	else if(veiculo == 6){ //hydra roxo
+		ULT[6] = CreateVehicle(520,325.099,2538.880,17.527,178.709,0,0,ULTRESPAWN);
+		SendClientMessageToAll(ROXO,"Hydra da equipe roxa renasceu");
+	}
+	else if(veiculo == 7){
+		ULT[7] = CreateVehicle(432,291.4309,2539.1721,16.8295,180.2851,43,0,ULTRESPAWN);
+		SendClientMessageToAll(ROXO,"Rhino da equipe roxa renasceu");
+	}
 	
     return 1;
 }
