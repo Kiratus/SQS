@@ -1,0 +1,385 @@
+#include <a_samp>
+
+#define FILTERSCRIPT
+
+#define COLOR_GREEN 		0xB1FB44FF
+#define COLOR_RED 			0xFF444499
+#define COLOR_YELLOW 		0xFFFF00AA
+#define COLOR_WHITE 		0xFFFFFFAA
+#define COLOR_SYSTEM 		0x00F6F6AA
+#define COLOR_BLACK 		0x000000AA
+#define COLOR_BLUE 			0x0066F6AA
+#define COLOR_GREY 			0x7A7979AA
+#define COLOR_ORANGE 		0xFF9900AA
+#define COLOR_PINK 			0xF600F6AA
+#define COLOR_PURPLE 		0x9F00F6AA
+#define COLOR_LIGHTBLUE 	0x33CCFF19
+
+// Variáveis globais
+new szString[256];
+new minigun[MAX_PLAYERS];
+new sniperdm[MAX_PLAYERS];
+new InDM[MAX_PLAYERS];
+
+//spawns minigun dm--------------------------------------
+new Float:MDMSpawns[][4] = {
+	{2205.4531,1613.0443,999.9776,4.9999},
+	{2218.2949,1613.3134,999.9827,2.7241},
+	{2193.5117,1625.7844,999.9706,177.5425},
+	{2181.9653,1577.2335,999.9650,6.7742},
+	{2228.2803,1594.2496,999.9643,95.4250},
+	{2220.1484,1554.7620,1004.7244,353.9040}
+};
+
+//spawn sniper dm-----------------------------------------
+new Float:SniperSpawns[11][3] = {
+    {-2530.9412,-523.9818,265.7876},
+    {-2589.7305,-567.3199,257.5419},
+    {-2601.6638,-725.5169,228.8935},
+    {-2568.8789,-798.1446,228.8935},
+    {-2440.2124,-747.8601,238.1947},
+    {-2480.8142,-732.1995,236.2781},
+    {-2421.2671,-710.6873,228.8935},
+    {-2455.8738,-649.9435,229.0099},
+    {-2487.1726,-680.4384,236.0682},
+    {-2463.8572,-651.2489,242.6882},
+    {-2514.3594,-616.0865,250.2327}
+};
+
+#if defined FILTERSCRIPT
+
+public OnFilterScriptInit()
+{
+	print("\n--------------------------------------");
+	print("       arenas DM by Pony");
+	print("--------------------------------------\n");
+	
+	loadSniperMap();
+	
+	return 1;
+}
+
+public OnFilterScriptExit()
+{
+	return 1;
+}
+
+#else
+#endif
+
+public OnPlayerConnect(playerid)
+{
+    InDM[playerid] = 0;
+    minigun[playerid] = 0;
+    sniperdm[playerid] = 0;
+	return 1;
+}
+
+public OnPlayerDisconnect(playerid, reason)
+{
+    InDM[playerid] = 0;
+	minigun[playerid] = 0;
+	sniperdm[playerid] = 0;
+	return 1;
+}
+
+public OnPlayerSpawn(playerid) //configurações de spawn
+{
+
+	if(InDM[playerid] == 1){
+	    ResetPlayerWeapons(playerid);
+	    //minigun DM
+		if(minigun[playerid] == 1) minigunSpawn(playerid);
+
+		//sniper DM
+		else if(sniperdm[playerid] == 1) sniperdmSpawn(playerid);
+		
+ 	}
+	
+	//nenhum DM
+	else for(new i = GetPlayerPoolSize(); i != -1; --i) ShowPlayerNameTagForPlayer(playerid, i, true);
+	
+	return 1;
+}
+
+public OnPlayerCommandText(playerid, cmdtext[])
+{
+	//MINIGUN DM ----------------------------------------------
+	if (strcmp("/minigun", cmdtext, true, 4) == 0)
+	{
+		new PlayerName[MAX_PLAYER_NAME];
+		GetPlayerName(playerid, PlayerName, sizeof(PlayerName));
+		
+	    if(minigun[playerid] == 0 && InDM[playerid] == 0) { //entrada
+	        ResetPlayerWeapons(playerid);
+	        minigun[playerid] = 1;
+			InDM[playerid] = 1;
+
+			SendClientMessage(playerid, COLOR_GREEN, "* Você entrou na arena minigun. Você voltará automaticamente sempre que morrer.");
+			SendClientMessage(playerid, COLOR_GREEN, "* Para sair, digite /minigun novamente.");
+			format(szString, sizeof(szString), "[DM] %s (ID:%d) foi para a arena minigun (/minigun).", PlayerName, playerid);
+	  		SendClientMessageToAll(COLOR_YELLOW, szString);
+	  		
+	  		minigunSpawn(playerid);
+	  		FreezeLoadObjects(playerid); //trava o player enquanto o cenário carrega
+		}
+
+		else if(minigun[playerid] == 0 && InDM[playerid] == 1) SendClientMessage(playerid, COLOR_RED, "Saia do DM atual para entrar na arena minigun");
+
+		else { //saída
+		    minigun[playerid] = 0;
+		    
+		    exitDM(playerid);
+		    
+		    SendClientMessage(playerid, COLOR_GREEN, "* Você saiu da arena minigun.");
+		}
+		return 1;
+ 	}
+ 	//-------------------------------------------------------------------------------
+ 	
+	//sniper DM --------------------------------------------------------------------
+	if(!strcmp("/sniperdm", cmdtext, true))
+    {
+        new PlayerName[MAX_PLAYER_NAME];
+        GetPlayerName(playerid,PlayerName,128);
+        
+        if(InDM[playerid] == 0 && sniperdm[playerid] == 0){ //entrada
+        	ResetPlayerWeapons(playerid);
+            InDM[playerid] = 1;
+            sniperdm[playerid] = 1;
+            
+            sniperdmSpawn(playerid);
+            FreezeLoadObjects(playerid); //trava o player enquanto o cenário carrega
+        	
+        	SendClientMessage(playerid, COLOR_GREEN, "* Você entrou na arena sniper. Você voltará automaticamente sempre que morrer.");
+			SendClientMessage(playerid, COLOR_GREEN, "* Para sair, digite /sniperdm novamente.");
+			format(szString, sizeof(szString), "[DM] %s (ID:%d) foi para a arena sniper (/sniperdm).", PlayerName, playerid);
+			SendClientMessageToAll(COLOR_YELLOW, szString);
+        }
+
+		else if(InDM[playerid] == 1 && sniperdm[playerid] == 0) SendClientMessage(playerid, COLOR_RED, "Saia do DM atual para entrar na arena sniper");
+
+		else { //saida
+            sniperdm[playerid] = 0;
+            
+            exitDM(playerid);
+            
+            SendClientMessage(playerid, COLOR_GREEN, "* Você saiu da arena sniper.");
+		}
+        return 1;
+    }
+	return 0;
+}
+
+public OnPlayerUpdate(playerid)
+{
+    if(InDM[playerid] == 1){
+		for(new i = GetPlayerPoolSize(); i != -1; --i){
+			SetPlayerMarkerForPlayer(i,playerid,00);
+			ShowPlayerNameTagForPlayer(playerid, i, false);
+		}
+    }
+    
+    return 1;
+}
+
+stock exitDM(playerid){
+    InDM[playerid] = 0;
+    
+    SetPlayerHealth(playerid, 100);
+    SetPlayerVirtualWorld(playerid, 0);
+	SetPlayerInterior(playerid, 0);
+	SpawnPlayer(playerid);
+	ResetPlayerWeapons(playerid);
+    
+	return 1;
+}
+
+stock minigunSpawn(playerid){
+    SetPlayerHealth(playerid, 100);
+   	SetPlayerArmour(playerid, 100);
+    SetPlayerInterior(playerid, 1);
+	SetPlayerVirtualWorld(playerid, 10);
+	new rand = random(sizeof(MDMSpawns));
+	SetPlayerPos(playerid, MDMSpawns[rand][0], MDMSpawns[rand][1], MDMSpawns[rand][2]);
+	SetPlayerFacingAngle(playerid, MDMSpawns[rand][3]);
+	GivePlayerWeapon(playerid, 38, 9999);
+	
+	return 1;
+}
+
+stock sniperdmSpawn(playerid){
+	SetPlayerHealth(playerid, 100);
+   	SetPlayerArmour(playerid, 100);
+	SetPlayerInterior(playerid, 0);
+   	SetPlayerVirtualWorld(playerid, 3);
+    new rand = random(sizeof(SniperSpawns));
+   	SetPlayerPos(playerid, SniperSpawns[rand][0], SniperSpawns[rand][1],SniperSpawns[rand][2]);
+   	GivePlayerWeapon(playerid, 34, 9999);
+   	
+   	return 1;
+}
+
+stock loadSniperMap(){
+
+	CreateObject(4867,-2520.92285200,-730.55767800,227.89349400,0.00000000,0.00000000,0.00000000); //object
+	CreateObject(4867,-2522.59350600,-567.60510300,235.44043000,5.15662016,0.00000000,0.00000000); //object(1)
+	CreateObject(1553,-2510.55957000,-693.44458000,279.78216600,0.00000000,0.00000000,-89.38141604); //object(2)
+	CreateObject(1553,-2510.60937500,-703.66064500,279.77569600,0.00000000,0.00000000,-91.95972612); //object(3)
+	CreateObject(7939,-2464.27929700,-821.65722700,229.44627400,0.00000000,0.00000000,0.00000000); //object(5)
+	CreateObject(7939,-2414.82470700,-771.97546400,229.44627400,0.00000000,0.00000000,90.24085273); //object(6)
+	CreateObject(7939,-2415.21484400,-672.67480500,229.44627400,0.00000000,0.00000000,90.24085273); //object(7)
+	CreateObject(5131,-2466.30395500,-661.56518600,234.02446000,0.00000000,0.00000000,-88.52197935); //object(10)
+	CreateObject(5137,-2438.67041000,-683.00311300,232.98397800,0.00000000,0.00000000,0.00000000); //object(11)
+	CreateObject(5137,-2464.53393600,-720.48120100,232.95929000,0.00000000,0.00000000,-180.48176276); //object(12)
+	CreateObject(5309,-2467.85888700,-752.73852500,232.68693500,0.00000000,0.00000000,0.00000000); //object(13)
+	CreateObject(5309,-2529.42211900,-714.65936300,232.76191700,0.00000000,0.00000000,-63.59831526); //object(14)
+	CreateObject(5313,-2526.10400400,-625.92901600,240.27156100,0.00000000,0.00000000,270.72261550); //object(15)
+	CreateObject(3399,-2505.60644500,-709.84814500,230.78746000,1.71887339,-20.62648062,0.00000000); //object(16)
+	CreateObject(3399,-2492.84497100,-704.78088400,237.87213100,1.71887339,-20.62648062,111.72677005); //object(17)
+	CreateObject(3399,-2496.07812500,-697.76257300,244.91790800,1.71887339,-20.62648062,125.47781443); //object(18)
+	CreateObject(3399,-2500.84277300,-691.73321500,251.82748400,1.71887339,-20.62648062,139.22891610); //object(19)
+	CreateObject(3399,-2506.44384800,-687.35406500,258.50750700,1.71887339,-20.62648062,148.68277702); //object(20)
+	CreateObject(3399,-2512.81665000,-683.91064500,265.28421000,1.71887339,-20.62648062,163.29331539); //object(21)
+	CreateObject(3399,-2518.35986300,-687.31732200,271.92883300,-4.29718346,-6.87549354,251.81546662); //object(22)
+	CreateObject(3399,-2516.63305700,-693.75500500,275.62838700,-4.29718346,-6.87549354,333.46172325); //object(23)
+	CreateObject(3399,-2514.25317400,-723.68377700,230.48753400,1.71887339,-3.43774677,111.72677005); //object(24)
+	CreateObject(3399,-2518.55175800,-714.54870600,235.13145400,1.71887339,-3.43774677,115.16434493); //object(25)
+	CreateObject(1225,-2485.71142600,-717.63861100,235.68383800,0.00000000,0.00000000,0.00000000); //object(27)
+	CreateObject(1225,-2447.10498000,-699.14611800,229.42099000,0.00000000,0.00000000,0.00000000); //object(28)
+	CreateObject(1225,-2456.59960900,-696.93713400,229.42099000,0.00000000,0.00000000,0.00000000); //object(29)
+	CreateObject(1225,-2456.65600600,-654.90832500,228.29925500,0.00000000,0.00000000,0.00000000); //object(30)
+	CreateObject(1225,-2442.01684600,-643.10040300,228.89784200,0.00000000,0.00000000,0.00000000); //object(31)
+	CreateObject(1225,-2438.59033200,-654.50769000,228.29925500,0.00000000,0.00000000,0.00000000); //object(32)
+	CreateObject(1225,-2514.51001000,-678.17199700,228.29925500,0.00000000,0.00000000,0.00000000); //object(33)
+	CreateObject(1225,-2535.80200200,-672.54412800,228.29925500,0.00000000,0.00000000,0.00000000); //object(34)
+	CreateObject(1225,-2520.91406300,-661.52813700,228.29925500,0.00000000,0.00000000,0.00000000); //object(35)
+	CreateObject(1225,-2505.76123000,-659.22430400,228.29925500,0.00000000,0.00000000,0.00000000); //object(36)
+	CreateObject(1225,-2559.24096700,-630.78222700,230.00947600,0.00000000,0.00000000,0.00000000); //object(37)
+	CreateObject(616,-2562.99609400,-669.42852800,227.88732900,0.00000000,0.00000000,0.00000000); //object(38)
+	CreateObject(616,-2569.98730500,-657.83404500,227.88732900,0.00000000,0.00000000,0.00000000); //object(39)
+	CreateObject(616,-2573.93627900,-650.52600100,227.88732900,0.00000000,0.00000000,0.00000000); //object(40)
+	CreateObject(616,-2577.38842800,-645.46691900,228.27236900,0.00000000,0.00000000,0.00000000); //object(41)
+	CreateObject(616,-2577.55615200,-640.71203600,228.70144700,0.00000000,0.00000000,0.00000000); //object(42)
+	CreateObject(616,-2581.32275400,-617.05432100,230.83641100,0.00000000,0.00000000,0.00000000); //object(43)
+	CreateObject(616,-2572.58544900,-614.64929200,231.05345200,0.00000000,0.00000000,0.00000000); //object(44)
+	CreateObject(616,-2560.10595700,-681.69287100,227.88732900,0.00000000,0.00000000,0.00000000); //object(45)
+	CreateObject(616,-2561.27978500,-702.11914100,227.88732900,0.00000000,0.00000000,0.00000000); //object(46)
+	CreateObject(616,-2555.24316400,-712.27410900,227.88732900,0.00000000,0.00000000,0.00000000); //object(47)
+	CreateObject(616,-2548.95288100,-723.06713900,227.88732900,0.00000000,0.00000000,0.00000000); //object(48)
+	CreateObject(616,-2544.81787100,-734.36334200,227.88732900,0.00000000,0.00000000,0.00000000); //object(49)
+	CreateObject(616,-2530.79687500,-751.63446000,227.88732900,0.00000000,0.00000000,0.00000000); //object(50)
+	CreateObject(616,-2499.16650400,-789.16589400,227.88732900,0.00000000,0.00000000,0.00000000); //object(51)
+	CreateObject(616,-2505.72631800,-759.72595200,227.88732900,0.00000000,0.00000000,0.00000000); //object(52)
+	CreateObject(616,-2460.91162100,-780.81158400,227.88732900,0.00000000,0.00000000,0.00000000); //object(53)
+	CreateObject(616,-2451.07592800,-803.89147900,227.88732900,0.00000000,0.00000000,0.00000000); //object(54)
+	CreateObject(616,-2470.13330100,-806.85766600,227.88732900,0.00000000,0.00000000,0.00000000); //object(55)
+	CreateObject(616,-2507.11035200,-797.94592300,227.88732900,0.00000000,0.00000000,0.00000000); //object(56)
+	CreateObject(616,-2520.04003900,-773.56073000,227.88732900,0.00000000,0.00000000,0.00000000); //object(57)
+	CreateObject(616,-2550.39184600,-761.76074200,227.88732900,0.00000000,0.00000000,0.00000000); //object(58)
+	CreateObject(616,-2585.89355500,-765.61022900,227.88732900,0.00000000,0.00000000,0.00000000); //object(59)
+	CreateObject(616,-2580.22729500,-785.81488000,227.88732900,0.00000000,0.00000000,0.00000000); //object(60)
+	CreateObject(616,-2596.24609400,-802.02807600,227.88732900,0.00000000,0.00000000,0.00000000); //object(61)
+	CreateObject(616,-2572.84033200,-796.70501700,227.88732900,0.00000000,0.00000000,0.00000000); //object(62)
+	CreateObject(616,-2555.71752900,-764.07061800,227.88732900,0.00000000,0.00000000,0.00000000); //object(63)
+	CreateObject(616,-2587.95361300,-726.39886500,227.88732900,0.00000000,0.00000000,0.00000000); //object(64)
+	CreateObject(616,-2616.99389600,-716.70990000,227.88732900,0.00000000,0.00000000,0.00000000); //object(65)
+	CreateObject(616,-2589.11425800,-683.03137200,227.88732900,0.00000000,0.00000000,0.00000000); //object(66)
+	CreateObject(616,-2600.44873000,-622.69543500,230.32733200,0.00000000,0.00000000,0.00000000); //object(67)
+	CreateObject(616,-2611.98999000,-654.88354500,227.88732900,0.00000000,0.00000000,0.00000000); //object(68)
+	CreateObject(616,-2586.92089800,-644.16137700,228.39016700,0.00000000,0.00000000,0.00000000); //object(69)
+	CreateObject(616,-2575.68774400,-679.38244600,227.88732900,0.00000000,0.00000000,0.00000000); //object(70)
+	CreateObject(616,-2581.49560500,-689.68463100,227.88732900,0.00000000,0.00000000,0.00000000); //object(71)
+	CreateObject(616,-2572.23632800,-740.54675300,227.88732900,0.00000000,0.00000000,0.00000000); //object(72)
+	CreateObject(616,-2567.89868200,-700.68560800,227.88732900,0.00000000,0.00000000,0.00000000); //object(73)
+	CreateObject(616,-2574.27148400,-708.23559600,227.88732900,0.00000000,0.00000000,0.00000000); //object(74)
+	CreateObject(616,-2593.31958000,-720.36126700,227.88732900,0.00000000,0.00000000,0.00000000); //object(75)
+	CreateObject(616,-2605.39086900,-696.65387000,227.88732900,0.00000000,0.00000000,0.00000000); //object(76)
+	CreateObject(616,-2603.83520500,-675.86486800,227.88732900,0.00000000,0.00000000,0.00000000); //object(77)
+	CreateObject(616,-2588.73364300,-661.96637000,227.88732900,0.00000000,0.00000000,0.00000000); //object(78)
+	CreateObject(616,-2581.95190400,-656.33880600,227.88732900,0.00000000,0.00000000,0.00000000); //object(79)
+	CreateObject(616,-2593.88916000,-656.00939900,227.88732900,0.00000000,0.00000000,0.00000000); //object(80)
+	CreateObject(616,-2608.48559600,-669.16961700,227.88732900,0.00000000,0.00000000,0.00000000); //object(81)
+	CreateObject(616,-2575.26660200,-664.16656500,227.88732900,0.00000000,0.00000000,0.00000000); //object(82)
+	CreateObject(616,-2559.56616200,-665.73486300,227.88732900,0.00000000,0.00000000,0.00000000); //object(83)
+	CreateObject(616,-2559.85180700,-758.08447300,227.88732900,0.00000000,0.00000000,0.00000000); //object(84)
+	CreateObject(616,-2541.27392600,-756.75116000,227.88732900,0.00000000,0.00000000,0.00000000); //object(85)
+	CreateObject(616,-2530.49853500,-775.81616200,227.88732900,0.00000000,0.00000000,0.00000000); //object(86)
+	CreateObject(616,-2544.69775400,-759.46106000,227.88732900,0.00000000,0.00000000,0.00000000); //object(87)
+	CreateObject(616,-2565.56567400,-768.27264400,227.88732900,0.00000000,0.00000000,0.00000000); //object(88)
+	CreateObject(616,-2602.30249000,-784.92675800,227.88732900,0.00000000,0.00000000,0.00000000); //object(89)
+	CreateObject(616,-2584.75293000,-748.31652800,227.88732900,0.00000000,0.00000000,0.00000000); //object(90)
+	CreateObject(616,-2579.06005900,-749.75274700,227.88732900,0.00000000,0.00000000,0.00000000); //object(91)
+	CreateObject(616,-2581.80542000,-781.16687000,227.88732900,0.00000000,0.00000000,0.00000000); //object(92)
+	CreateObject(616,-2575.94360400,-781.60022000,227.88732900,0.00000000,0.00000000,0.00000000); //object(93)
+	CreateObject(616,-2596.77490200,-750.16760300,227.88732900,0.00000000,0.00000000,0.00000000); //object(94)
+	CreateObject(616,-2601.51220700,-746.17370600,227.88732900,0.00000000,0.00000000,0.00000000); //object(95)
+	CreateObject(616,-2605.92919900,-740.95092800,227.88732900,0.00000000,0.00000000,0.00000000); //object(96)
+	CreateObject(616,-2600.51171900,-722.24829100,227.88732900,0.00000000,0.00000000,0.00000000); //object(97)
+	CreateObject(616,-2587.97290000,-731.26239000,227.88732900,0.00000000,0.00000000,0.00000000); //object(98)
+	CreateObject(616,-2582.09277300,-731.72113000,227.88732900,0.00000000,0.00000000,0.00000000); //object(99)
+	CreateObject(616,-2604.46313500,-773.89740000,227.88732900,0.00000000,0.00000000,0.00000000); //object(100)
+	CreateObject(616,-2591.46191400,-753.35577400,227.88732900,0.00000000,0.00000000,0.00000000); //object(101)
+	CreateObject(616,-2529.85986300,-797.03717000,227.88732900,0.00000000,0.00000000,0.00000000); //object(102)
+	CreateObject(616,-2531.61425800,-780.94720500,227.88732900,0.00000000,0.00000000,0.00000000); //object(103)
+	CreateObject(616,-2535.09570300,-818.93078600,227.88732900,0.00000000,0.00000000,0.00000000); //object(104)
+	CreateObject(616,-2547.75952100,-776.05743400,227.88732900,0.00000000,0.00000000,0.00000000); //object(105)
+	CreateObject(616,-2538.85083000,-792.38403300,227.88732900,0.00000000,0.00000000,0.00000000); //object(106)
+	CreateObject(616,-2556.17504900,-770.97222900,227.88732900,0.00000000,0.00000000,0.00000000); //object(107)
+	CreateObject(616,-2560.89086900,-720.29394500,227.88732900,0.00000000,0.00000000,0.00000000); //object(108)
+	CreateObject(616,-2557.65600600,-729.52130100,227.88732900,0.00000000,0.00000000,0.00000000); //object(109)
+	CreateObject(616,-2511.51196300,-671.80511500,227.88732900,0.00000000,0.00000000,0.00000000); //object(110)
+	CreateObject(616,-2525.69311500,-669.45013400,227.88732900,0.00000000,0.00000000,0.00000000); //object(111)
+	CreateObject(616,-2520.44848600,-682.10546900,227.88732900,0.00000000,0.00000000,0.00000000); //object(112)
+	CreateObject(617,-2447.18823200,-701.91729700,229.00906400,0.00000000,0.00000000,0.00000000); //object(113)
+	CreateObject(18228,-2597.92309600,-577.34564200,239.46517900,0.00000000,0.00000000,0.00000000); //object(115)
+	CreateObject(18228,-2528.61401400,-525.30633500,243.06131000,0.00000000,0.00000000,-53.28507495); //object(116)
+	CreateObject(744,-2531.27783200,-760.03454600,227.10444600,0.00000000,0.00000000,0.00000000); //object(117)
+	CreateObject(744,-2566.47460900,-795.84491000,227.07939100,0.00000000,0.00000000,0.00000000); //object(118)
+	CreateObject(744,-2598.79174800,-728.33996600,227.42942800,0.00000000,0.00000000,0.00000000); //object(119)
+	CreateObject(18273,-2489.34912100,-525.70196500,248.22279400,0.00000000,0.00000000,0.00000000); //object(120)
+	CreateObject(18273,-2548.58618200,-542.42767300,241.74829100,0.00000000,0.00000000,0.00000000); //object(121)
+	CreateObject(18268,-2592.84985400,-510.24939000,261.04763800,0.00000000,0.00000000,0.00000000); //object(122)
+	CreateObject(16061,-2621.70043900,-797.80688500,226.95585600,0.00000000,0.00000000,0.00000000); //object(123)
+	CreateObject(791,-2449.92919900,-597.70355200,230.79394500,0.00000000,0.00000000,0.00000000); //object(125)
+	CreateObject(791,-2441.02832000,-549.31616200,234.55023200,0.00000000,0.00000000,0.00000000); //object(126)
+	CreateObject(791,-2601.14379900,-535.08227500,236.58476300,0.00000000,0.00000000,0.00000000); //object(127)
+	CreateObject(791,-2430.91308600,-785.56683300,224.89349400,0.00000000,0.00000000,0.00000000); //object(128)
+	CreateObject(782,-2451.37207000,-650.37817400,227.98750300,0.00000000,0.00000000,0.00000000); //object(130)
+	CreateObject(782,-2455.32153300,-643.22021500,228.49809300,0.00000000,0.00000000,0.00000000); //object(131)
+	CreateObject(782,-2455.36914100,-643.02569600,228.51565600,0.00000000,0.00000000,0.00000000); //object(132)
+	CreateObject(782,-2465.29736300,-646.96435500,228.16021700,0.00000000,0.00000000,0.00000000); //object(133)
+	CreateObject(782,-2465.70068400,-651.23565700,227.91032400,0.00000000,0.00000000,0.00000000); //object(134)
+	CreateObject(782,-2461.81005900,-658.03515600,227.91032400,0.00000000,0.00000000,0.00000000); //object(135)
+	CreateObject(782,-2459.91284200,-660.87066700,227.91032400,0.00000000,0.00000000,0.00000000); //object(136)
+	CreateObject(782,-2457.71460000,-659.54687500,227.91032400,0.00000000,0.00000000,0.00000000); //object(137)
+	CreateObject(782,-2455.45410200,-656.88201900,227.91032400,0.00000000,0.00000000,0.00000000); //object(138)
+	CreateObject(782,-2452.63574200,-651.82568400,227.91032400,0.00000000,0.00000000,0.00000000); //object(139)
+	CreateObject(782,-2452.44946300,-644.61822500,228.37193300,0.00000000,0.00000000,0.00000000); //object(140)
+	CreateObject(782,-2453.96728500,-639.90771500,228.79702800,0.00000000,0.00000000,0.00000000); //object(141)
+	CreateObject(782,-2459.92822300,-640.54522700,228.73950200,0.00000000,0.00000000,0.00000000); //object(142)
+	CreateObject(782,-2466.25317400,-642.51983600,228.56131000,0.00000000,0.00000000,0.00000000); //object(143)
+	CreateObject(782,-2467.92334000,-645.38928200,228.30235300,0.00000000,0.00000000,0.00000000); //object(144)
+	CreateObject(782,-2468.24047900,-648.43927000,228.02711500,0.00000000,0.00000000,0.00000000); //object(145)
+	CreateObject(782,-2467.66333000,-652.77240000,227.91032400,0.00000000,0.00000000,0.00000000); //object(146)
+	CreateObject(17876,-2431.50341800,-640.13586400,236.65434300,0.00000000,0.00000000,0.00000000); //object(149)
+	
+	return 1;
+}
+
+forward FreezeLoadObjects(playerid);
+public FreezeLoadObjects(playerid)
+{
+    TogglePlayerControllable(playerid,0);
+    SetTimerEx("UnFreezeLoadObjects",3000,0,"i",playerid);
+    GameTextForPlayer(playerid,"~r~CARREGANDO CENARIO",2900,3);
+}
+forward UnFreezeLoadObjects(playerid);
+public UnFreezeLoadObjects(playerid)
+{
+    TogglePlayerControllable(playerid,1);
+    GameTextForPlayer(playerid,"~g~CARREGADO",1000,3);
+}
+
+forward getDM(playerid);
+public getDM(playerid) return InDM[playerid];

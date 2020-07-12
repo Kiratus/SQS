@@ -41,10 +41,12 @@ new RandomMSG[][] =
   "[SERVER] Use /ajuda para ver alguns comandos",
   "[SERVER] Está cansado da Deagle? Use /armas",
   "[SERVER] Utilize /mudar para mudar de time!",
-  "[SERVER] Não faça DB (Drive-BY, Atropelar ou matar alguem de dentro do carro) ou será punido!",
+  "[SERVER] Nãoo faça DB (Drive-BY, Atropelar ou matar alguem de dentro do carro) ou será punido!",
   "[SERVER] Se você está num veiculo e a vitima estiver em outro, não é drive-by!",
-  "[SERVER] Se quiser entrar no modo pacífico use /godmode" /*,
-  "[SERVER] Você pode fazer missões dentro do matata, mas cuidado para não ser morto!"*/
+  "[SERVER] Se quiser entrar no modo pacífico use /godmode",
+  "[SERVER] Você pode ir para a arena minigun usando /minigun",
+  "[SERVER] Você pode ir para a arena sniper usando /sniperdm"//,
+  //"[SERVER] Você pode fazer missões dentro do matata, mas cuidado para não ser morto!"
 };
 
 new RandomColors [] =
@@ -77,22 +79,12 @@ enum pInfo {
 	pMoney,
 	pScore,
 	pAdmin,
-	pVip,
 	bool: god
 };
 
 new ULT[8];
 new pUltVeh[MAX_PLAYERS] = false, pUltVehID[MAX_PLAYERS];
 new PlayerInfo[MAX_PLAYERS][pInfo];
-
-/* //Round code stolen from mike's Manhunt :P
-new gRoundTime = 3600000;                   // Round time - 1 hour
-new gRoundTime = 1200000;					// Round time - 20 mins
-new gRoundTime = 900000;					// Round time - 15 mins
-new gRoundTime = 600000;					// Round time - 10 mins
-new gRoundTime = 300000;					// Round time - 5 mins
-new gRoundTime = 120000;					// Round time - 2 mins
-new gRoundTime = 60000;					// Round time - 1 min */
 
 new gActivePlayers[MAX_PLAYERS];
 
@@ -114,7 +106,7 @@ public OnPlayerConnect(playerid) {
     new strings[15];
     new file[64];
 
-	//reset de variáveis
+	//reset de viáveis
     KillingSpree[playerid] = 0;
     SetPlayerWantedLevel(playerid,0);
     gActivePlayers[playerid]++;
@@ -133,7 +125,7 @@ public OnPlayerConnect(playerid) {
 	
     GetPlayerName(playerid,Player_Name,sizeof(Player_Name));
     format(string,256,"==> %s [Id:%i] Entrou no servidor",Player_Name,playerid); SendClientMessageToAll(ROXO,string);
-    
+
     //sistema de contas
     format(file,sizeof(file),"Accs/%s.ini",Player_Name);
     if(DOF2_FileExists(file)) {
@@ -154,10 +146,10 @@ public OnPlayerDisconnect(playerid) {
     GetPlayerName(playerid,Player_Name,sizeof(Player_Name));
     
     //update usuários online
-	format(strings, 15, "%d Online",GetOnLinePlayers());
+    gActivePlayers[playerid]--;
+	format(strings, 15, "%d Online",GetOnLinePlayers()-1);
 	TextDrawSetString(players, strings);
 	TextDrawShowForPlayer(playerid, players);
-	gActivePlayers[playerid]--;
 	
 	//avisos
     format(string,256,"<== %s [Id:%i] Saiu do servidor",Player_Name,playerid); SendClientMessageToAll(ROXO,string);
@@ -169,8 +161,7 @@ public OnPlayerDisconnect(playerid) {
     DOF2_SetInt(file, "Money",GetPlayerMoney(playerid));
     DOF2_SetInt(file, "Score",GetPlayerScore(playerid));
     DOF2_SetInt(file, "AdminLevel",PlayerInfo[playerid][pAdmin]);
-    DOF2_SetInt(file, "VipLevel",PlayerInfo[playerid][pVip]);
-    
+
     DOF2_SaveFile();
 
 
@@ -190,13 +181,12 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[]) {
                 format(file,sizeof(file),"Accs/%s.ini",Player_Name);
                 DOF2_CreateFile(file, inputtext);
                 DOF2_SetInt(file, "Kills", 0);
-                DOF2_SetInt(file, "Deaths", 0); 
-                DOF2_SetInt(file, "Money", 1000); 
+                DOF2_SetInt(file, "Deaths", 0);
+                DOF2_SetInt(file, "Money", 1000);
                 DOF2_SetInt(file, "Score", 0);
                 DOF2_SetInt(file, "AdminLevel", 0);
-				DOF2_SetInt(file, "VipLevel", 0);
 				GivePlayerMoney(playerid, 1000);
-                DOF2_SaveFile(); 
+                DOF2_SaveFile();
             }
         }
         case DIALOG_LOGIN: { //carrega arquivo de conta
@@ -212,7 +202,6 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[]) {
                         PlayerInfo[playerid][pMoney] = DOF2_GetInt(file,"Money");
                         PlayerInfo[playerid][pScore] = DOF2_GetInt(file,"Score");
                         PlayerInfo[playerid][pAdmin] = DOF2_GetInt(file,"AdminLevel");
-                        PlayerInfo[playerid][pVip] = DOF2_GetInt(file,"VipLevel");
                         GivePlayerMoney(playerid, PlayerInfo[playerid][pMoney]);
                         SetPlayerScore(playerid, PlayerInfo[playerid][pScore]);
                         return 1;
@@ -251,16 +240,15 @@ public OnPlayerCommandText(playerid, cmdtext[])
 		SendClientMessage(playerid, COLOR_DGREEN, " - Para ver o objetivo do server, utilize /objetivo");
 		SendClientMessage(playerid, COLOR_DGREEN, " - Para ver os comandos do server, utilize /comandos");
 		SendClientMessage(playerid, COLOR_DGREEN, " - Para ver as regras do server, utilize /regras");
-		SendClientMessage(playerid, COLOR_DGREEN, " - Para ver as informações do server, utilize /info");
 
 		return 1;
 	}
 	//-----------------------------------------------------------
 	if(strcmp(cmd, "/comandos", true) == 0) {
-		SendClientMessage(playerid, COLOR_DGREEN, " - AJUDA - /ajuda /info /comandos /armas /objetivo /regras");
-		SendClientMessage(playerid, COLOR_DGREEN, " - ARMAS - /m4 /sniper /deagle /shotgun /mp5");
-		SendClientMessage(playerid, COLOR_DGREEN, " - JOGADOR - /mudar /kill /godmode /v");
-		SendClientMessage(playerid, COLOR_DGREEN, " - TELEPORTS - /arena");
+		SendClientMessage(playerid, COLOR_DGREEN, " - AJUDA - /ajuda /comandos /armas /objetivo /regras");
+		SendClientMessage(playerid, COLOR_DGREEN, " - ARMAS - /m4 /sniper /deagle /shotgun /mp5 /suprema");
+		SendClientMessage(playerid, COLOR_DGREEN, " - JOGADOR - /mudar /allahu /godmode /v / nitro");
+		SendClientMessage(playerid, COLOR_DGREEN, " - TELEPORTS - /arena /minigun /sniperdm");
 
 		return 1;
 	}
@@ -364,7 +352,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 	    if(PlayerInfo[playerid][god] == true) return SendClientMessage(playerid,COLOR_RED,"Desabilite o modo pacífico primeiro (/godmode)");
         GivePlayerWeapon(playerid,10,1);
         GivePlayerMoney(playerid,-1);
-  		SendClientMessage(playerid,COLOR_GREY, "Você comprou a suprema ponta dupla por 1 dólar");
+  		SendClientMessage(playerid,COLOR_GREY, "Você comprou a suprema ponta dupla por 1 dï¿½lar");
         format(string,128,"[ID:%i] %s comprou a suprema (/suprema)",playerid,Player_Name),
         SendClientMessageToAll(COLOR_DGREEN,string);
         
@@ -384,7 +372,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 	//-----------------------------------------------------------
 	if(strcmp(cmd, "/objetivo", true) == 0) {
 		SendClientMessage(playerid, COLOR_DGREEN, " - Após escolher um time, você deve matar os outros jogadores");
-		SendClientMessage(playerid, COLOR_DGREEN, " - Quando você mata um jogador você ganha um de score e $1000 para gastar.");
+		SendClientMessage(playerid, COLOR_DGREEN, " - Quando você mata um jogador você ganha 1 de score e $1000 para gastar.");
 		SendClientMessage(playerid, COLOR_DGREEN, " - Portanto para ter mais poder de fogo, é necessário ter dinheiro. (/armas)");
 
 		return 1;
@@ -394,21 +382,28 @@ public OnPlayerCommandText(playerid, cmdtext[])
 		SendClientMessage(playerid, COLOR_DGREEN, " - Proibido o uso de: Cheats, Mods CLEO, e outros programas/mods ilegais");
 		SendClientMessage(playerid, COLOR_DGREEN, " - Proibido DB/Spawn Kill/Heli Kill, PROIBIDO SE MATAR NA ARENA (PULAR DO PREDIO)");
 		SendClientMessage(playerid, COLOR_DGREEN, " - Proibido Team Kill: Matar jogador do mesmo time! (mesma cor de nick)");
-		SendClientMessage(playerid, COLOR_DGREEN, " - O descumprimento das regras acima causará ban/kick/cadeia");
+		SendClientMessage(playerid, COLOR_DGREEN, " - Obrigatório compartilhar a esposa com todos os outros players.");
 
 		return 1;
 	}
 	//-----------------------------------------------------------
- 	if(strcmp(cmdtext, "/kill", true) == 0) {
+ 	if(strcmp(cmdtext, "/allahu", true) == 0) {
 		PlayerInfo[playerid][god] = false;
-        new Float:Life;
+        new Float:Life, Float:X, Float:Y, Float:Z;
         GetPlayerHealth(playerid,Life);
+        GetPlayerPos(playerid, X, Y, Z);
         
-        if(Life < 80) return SendClientMessage(playerid,COLOR_RED,"Você não pode cometer suicidio com a vida baixa.");
+        if(Life < 80){
+	 		SendClientMessage(playerid,COLOR_RED,"Você não pode cometer suicidio com a vida baixa.");
+	 		PlayerInfo[playerid][god] = true;
+	 		return 1;
+		}
         
         SetPlayerHealth(playerid,0);
-        format(string,128,"[ID:%i] %s Se matou (/kill)",playerid,Player_Name),
+        CreateExplosion(X, Y, Z, 0, 15.0);
+        format(string,128,"[ID:%i] %s ganhou 70 virgens (/allahu)",playerid,Player_Name),
         SendClientMessageToAll(COLOR_DGREEN,string);
+        PlayerInfo[playerid][god] = false;
 
 		return 1;
     }
@@ -419,6 +414,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         
 	    if(PlayerInfo[playerid][god] == false){
 	        if(Life < 100) return SendClientMessage(playerid,COLOR_RED,"Você só pode entrar no moto pacífico com a vida cheia.");
+	        if(CallRemoteFunction("getDM", "i", playerid) == 1) return SendClientMessage(playerid,COLOR_RED,"Você não pode entrar no modo pacífico dentro do DM. Aqui é guerra, rapá!");
 	        
 	        PlayerInfo[playerid][god] = true;
 	        SetPlayerHealth(playerid, Float:0x7F800000);
@@ -431,7 +427,9 @@ public OnPlayerCommandText(playerid, cmdtext[])
         	SetPlayerArmour(playerid, 0);
         	ResetPlayerWeapons(playerid);
         	SendClientMessage(playerid,COLOR_RED,"Godmode desativado");
-        	GivePlayerWeapon(playerid,24,500);
+        	GivePlayerWeapon(playerid, 4, 1);
+			GivePlayerWeapon(playerid, 30, 500);
+			GivePlayerWeapon(playerid, 24,500);
     	}
     	
 	    return 1;
@@ -465,7 +463,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 				printf("%s(playerid:%d) has transfered %d to %s(playerid:%d)",sendername, playerid, moneys, giveplayer, giveplayerid);
 			}
 			else {
-				SendClientMessage(playerid, COLOR_YELLOW, "Transação inválida..");
+				SendClientMessage(playerid, COLOR_YELLOW, "Transação inválida.");
 			}
 		}
 		else {
@@ -475,6 +473,21 @@ public OnPlayerCommandText(playerid, cmdtext[])
 		return 1;
 	}
 	//-----------------------------------------------------------
+	if(strcmp(cmd, "/nitro", true) == 0) {
+		new Float:X, Float:Y, Float:Z;
+		GetPlayerPos(playerid, X, Y, Z);
+
+  		if(!IsPlayerInAnyVehicle(playerid)) return SendClientMessage(playerid, COLOR_RED, "Você precisa estar em um carro.");
+
+   		new vehicleid = GetPlayerVehicleID(playerid);
+   		AddVehicleComponent(vehicleid, 1010); // x10 nitro
+
+        PlayerPlaySound(playerid, 1133, X, Y, Z);
+
+   		SendClientMessage(playerid, COLOR_GREEN, "Nitro adicionado!");
+		return 1;
+	}
+	//--------------------------------------------------------
 
 	
 	//admin commands
@@ -606,53 +619,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
 		}
 		//-----------------------------------------------------------
 	} //fim dos comandos de ADM
+
 	
-	if(PlayerInfo[playerid][pVip] == 1 || PlayerInfo[playerid][pAdmin] >= 3) { //comandos VIP
-	
-        if(strcmp(cmd, "/vip", true) == 0) {
-		    if (PlayerInfo[playerid][pAdmin] < 3 && !IsPlayerAdmin(playerid)) return SendClientMessage(playerid, COLOR_YELLOW, "NO ENOUGH LEVEL, STRANGER!");
-
-  			new tmp[256], player2, level;
-			tmp = strtok(cmdtext, idx);
-
-			if(!strlen(tmp)) {
-				SendClientMessage(playerid, COLOR_GREY, "USE: /promover [ID] [0 - NÃO / 1 - SIM]");
-				return 1;
-			}
-			player2 = strval(tmp);
-			if(!IsPlayerConnected(player2)) return SendClientMessage(playerid, COLOR_YELLOW, "Jogador não conectado");
-
-			tmp = strtok(cmdtext, idx);
-			if(!strlen(tmp)) {
-				SendClientMessage(playerid, COLOR_GREY, "USE: /promover [ID] [0 - NÃO / 1 - SIM]");
-				return 1;
-			}
-			level = strval(tmp);
-			if (level < 0 || level > 1) return SendClientMessage(playerid, COLOR_YELLOW, "nível inválido");
-
-			PlayerInfo[player2][pVip] = level;
-			SendClientMessage(playerid, COLOR_YELLOW, "Você alterou o status de vip do jogador");
-			SendClientMessage(player2, COLOR_YELLOW, "Seu status de vip foi alterado");
-			return 1;
-		}
-
-
-
-		if(strcmp(cmd, "/nitro", true) == 0) {
-		    new Float:X, Float:Y, Float:Z;
-			GetPlayerPos(playerid, X, Y, Z);
-		    
-		    if(!IsPlayerInAnyVehicle(playerid)) return SendClientMessage(playerid, COLOR_RED, "Você precisa estar em um carro.");
-		    
-   			new vehicleid = GetPlayerVehicleID(playerid);
-   			AddVehicleComponent(vehicleid, 1010); // x10 nitro
-   			
-            PlayerPlaySound(playerid, 1133, X, Y, Z);
-   			
-   			SendClientMessage(playerid, COLOR_GREEN, "Nitro adicionado!");
-		    return 1;
-		}
-	}
 
 	return SendClientMessage(playerid,COLOR_YELLOW,"Comando inexistente. Use /ajuda");
 }
@@ -661,117 +629,88 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
 public OnPlayerSpawn(playerid)
 {
-	SetPlayerInterior(playerid,0);
-	SetPlayerRandomSpawn(playerid);
 	TogglePlayerClock(playerid,0);
 	SetPVarInt(playerid,"Arena",0);
 	SetPVarInt(playerid,"Morto",0);
 	//SetPVarInt(playerid,"TK",0);
-	GivePlayerWeapon(playerid,24,500);
 
-    switch(pClass[playerid])
-    {
-        //time vermelho
-        case 0:
-        {
-            SetPlayerColor(playerid, 0xFF0000AA);
-            SetPlayerPos(playerid, 693.668,1959.560,5.109);
-            SetPlayerFacingAngle(playerid, 180.0);
+	if(CallRemoteFunction("getDM", "i", playerid) != 1){
+	    SetPlayerInterior(playerid,0);
+		SetPlayerRandomSpawn(playerid);
+		GivePlayerWeapon(playerid, 4, 1);
+		GivePlayerWeapon(playerid, 30, 500);
+		GivePlayerWeapon(playerid, 24,500);
+	
+	    switch(pClass[playerid])
+	    {
+	        //time vermelho
+	        case 0: spawnVermelho(playerid);
+	        case 1: spawnPolicia(playerid);
+	        case 2: spawnPolicia(playerid);
+	        case 3: spawnPolicia(playerid);
+	        //time azul
+	        case 4: spawnAzul(playerid);
+	        case 5: spawnPolicia(playerid);
+	        case 6: spawnPolicia(playerid);
+	        case 7: spawnPolicia(playerid);
+	        // time policiais
+	        case 8: spawnPolicia(playerid);
+	        case 9: spawnPolicia(playerid);
+	        case 10: spawnPolicia(playerid);
+	        case 11: spawnPolicia(playerid);
+	        //time roxo
+	        case 12: spawnRoxo(playerid);
+	        case 13: spawnRoxo(playerid);
+	        case 14: spawnRoxo(playerid);
+	        case 15: spawnRoxo(playerid);
         }
-        case 1:
-        {
-            SetPlayerColor(playerid, 0xFF0000AA);
-            SetPlayerPos(playerid, 693.668,1959.560,5.109);
-            SetPlayerFacingAngle(playerid, 180.0);
-        }
-        case 2:
-        {
-            SetPlayerColor(playerid, 0xFF0000AA);
-            SetPlayerPos(playerid, 693.668,1959.560,5.109);
-            SetPlayerFacingAngle(playerid, 180.0);
-        }
-        case 3:
-        {
-            SetPlayerColor(playerid, 0xFF0000AA);
-            SetPlayerPos(playerid, 693.668,1959.560,5.109);
-            SetPlayerFacingAngle(playerid, 180.0);
-        }
-        //time azul
-        case 4:
-        {
-            SetPlayerColor(playerid, 0x2641FEAA);
-            SetPlayerPos(playerid, -131.450,1229.313,19.469);
-            SetPlayerFacingAngle(playerid, 180.0);
-        }
-        case 5:
-        {
-            SetPlayerColor(playerid, 0x2641FEAA);
-            SetPlayerPos(playerid, -131.450,1229.313,19.469);
-            SetPlayerFacingAngle(playerid, 180.0);
-        }
-        case 6:
-        {
-            SetPlayerColor(playerid, 0x2641FEAA);
-            SetPlayerPos(playerid, -131.450,1229.313,19.469);
-            SetPlayerFacingAngle(playerid, 180.0);
-        }
-        case 7:
-        {
-            SetPlayerColor(playerid, 0x2641FEAA);
-            SetPlayerPos(playerid, -131.450,1229.313,19.469);
-            SetPlayerFacingAngle(playerid, 180.0);
-        }
-        // time policiais
-        case 8:
-        {
-            SetPlayerColor(playerid, 0xAFAFAFAA); 
-            SetPlayerPos(playerid, -548.710,2593.98,53.483);
-            SetPlayerFacingAngle(playerid, 180.0);
-        }
-        case 9:
-        {
-            SetPlayerColor(playerid, 0xAFAFAFAA);
-            SetPlayerPos(playerid, -548.710,2593.98,53.483);
-            SetPlayerFacingAngle(playerid, 180.0);
-        }
-        case 10:
-        {
-            SetPlayerColor(playerid, 0xAFAFAFAA);
-            SetPlayerPos(playerid, -548.710,2593.98,53.483);
-            SetPlayerFacingAngle(playerid, 180.0);
-        }
-        case 11:
-        {
-            SetPlayerColor(playerid, 0xAFAFAFAA);
-            SetPlayerPos(playerid, -548.710,2593.98,53.483);
-            SetPlayerFacingAngle(playerid, 180.0);
-        }
-        //time roxo
-        case 12:
-        {
-            SetPlayerColor(playerid, ROXO);
-            SetPlayerPos(playerid, 413.513,2533.530,18.668);
-            SetPlayerFacingAngle(playerid, 90.0);
-        }
-        case 13:
-        {
-            SetPlayerColor(playerid, ROXO);
-            SetPlayerPos(playerid, 413.513,2533.530,18.668);
-            SetPlayerFacingAngle(playerid, 90.0);
-        }
-        case 14:
-        {
-            SetPlayerColor(playerid, ROXO);
-            SetPlayerPos(playerid, 413.513,2533.530,18.668);
-            SetPlayerFacingAngle(playerid, 90.0);
-        }
-        case 15:
-        {
-            SetPlayerColor(playerid, ROXO);
-            SetPlayerPos(playerid, 413.513,2533.530,18.668);
-            SetPlayerFacingAngle(playerid, 90.0);
-        }
-    }
+	}
+	
+	//update na perícia das armas
+	SetPlayerSkillLevel(playerid, WEAPONSKILL_PISTOL, 999);
+	SetPlayerSkillLevel(playerid, WEAPONSKILL_PISTOL_SILENCED, 999);
+	SetPlayerSkillLevel(playerid, WEAPONSKILL_DESERT_EAGLE, 999);
+	SetPlayerSkillLevel(playerid, WEAPONSKILL_SHOTGUN, 999);
+	SetPlayerSkillLevel(playerid, WEAPONSKILL_SPAS12_SHOTGUN, 999);
+	SetPlayerSkillLevel(playerid, WEAPONSKILL_MICRO_UZI, 999);
+	SetPlayerSkillLevel(playerid, WEAPONSKILL_MP5, 999);
+	SetPlayerSkillLevel(playerid, WEAPONSKILL_AK47, 999);
+	SetPlayerSkillLevel(playerid, WEAPONSKILL_M4, 999);
+	SetPlayerSkillLevel(playerid, WEAPONSKILL_SNIPERRIFLE, 999);
+	SetPlayerSkillLevel(playerid, WEAPONSKILL_SAWNOFF_SHOTGUN, 999);
+	
+	return 1;
+}
+
+stock spawnVermelho(playerid){
+    SetPlayerColor(playerid, 0xFF0000AA);
+    SetPlayerPos(playerid, 693.668,1959.560,5.109);
+	SetPlayerFacingAngle(playerid, 180.0);
+	
+	return 1;
+}
+
+stock spawnAzul(playerid){
+    SetPlayerColor(playerid, 0x2641FEAA);
+	SetPlayerPos(playerid, -131.450,1229.313,19.469);
+ 	SetPlayerFacingAngle(playerid, 180.0);
+ 	
+	return 1;
+}
+
+stock spawnPolicia(playerid){
+    SetPlayerColor(playerid, 0xAFAFAFAA);
+    SetPlayerPos(playerid, -548.710,2593.98,53.483);
+    SetPlayerFacingAngle(playerid, 180.0);
+    
+	return 1;
+}
+
+stock spawnRoxo(playerid){
+    SetPlayerColor(playerid, ROXO);
+    SetPlayerPos(playerid, 413.513,2533.530,18.668);
+    SetPlayerFacingAngle(playerid, 90.0);
+
 	return 1;
 }
 
@@ -795,7 +734,6 @@ public SetPlayerRandomSpawn(playerid)
 
 public OnPlayerDeath(playerid, killerid, reason)
 {
-    print("Player morreu");
     new Player_Name[MAX_PLAYER_NAME], Player_Name2[MAX_PLAYER_NAME];
     new string[64];
     new veiculo, especial = false;
@@ -842,11 +780,11 @@ public OnPlayerDeath(playerid, killerid, reason)
 	}
 	
 	//team killing
-	if(GetPlayerColor(playerid) == GetPlayerColor(killerid)) {
+	if(CallRemoteFunction("getDM", "i", playerid) == 0 && GetPlayerColor(playerid) == GetPlayerColor(killerid)) {
 		new Float:x, Float:y, Float:z;
-        GetPlayerPos(playerid, x, y, z);
+        GetPlayerPos(killerid, x, y, z);
         SetPlayerPos(killerid, x, y, z+200);
-        SendClientMessage(killerid, COLOR_RED, "TEAM KILLING É PROIBIDO, MAKAKO.");
+        SendClientMessage(killerid, COLOR_RED, "TEAM KILLING é PROIBIDO, MAKAKO.");
         
         if(GetPVarInt(killerid,"TK") == 0) {
             SendClientMessage(killerid, COLOR_RED, "PUNIÇÃO: -$1000 e -5 SCORES");
@@ -862,6 +800,7 @@ public OnPlayerDeath(playerid, killerid, reason)
         
         if(GetPVarInt(killerid,"TK") > 1) {
             SendClientMessage(killerid, COLOR_RED,"Você foi kikado por cometer Team-Kill 3 vezes.");
+            SendClientMessageToAll(COLOR_RED,"O jogador abaixo foi kickado por matar jogadores do mesmo time");
 			Kick(killerid);
         }
         
@@ -915,8 +854,9 @@ public OnPlayerDeath(playerid, killerid, reason)
    	}
    	
    	//recompensa por matar player em killing spree
-   	if(KillingSpree[playerid] >= 3 && KillingSpree[playerid] < 5) {
-   	    format(string,256,"%s (ID: %i) foi neutralizado por %s (ID: %i). Recompensa ($2000 + 2 score).",Player_Name2,killerid,Player_Name,killerid);
+   	if(KillingSpree[playerid] < 3){}
+   	else if(KillingSpree[playerid] < 5) {
+   	    format(string,256,"%s (ID: %i) foi neutralizado por %s (ID: %i). Recompensa ($2000 + 2 score).",Player_Name2,playerid,Player_Name,killerid);
 	   	SendClientMessageToAll(COLOR_RED,string);
    	    GivePlayerMoney(killerid,2000);
    	    SetPlayerScore(killerid, GetPlayerScore(killerid) + 2);
@@ -963,7 +903,7 @@ public OnPlayerRequestClass(playerid, classid)
 {
 	iSpawnSet[playerid] = 0;
 	SetupPlayerForClassSelection(playerid);
-	 pClass[playerid] = classid;
+ 	pClass[playerid] = classid;
 	TextDrawShowForPlayer(playerid,dTextDraw);
 	if(classid == 0) GameTextForPlayer(playerid,"~w~Time ~r~Vermelho",5000,3);
     if(classid == 1) GameTextForPlayer(playerid,"~w~Time ~r~Vermelho",5000,3);
@@ -1224,7 +1164,7 @@ public OnPlayerEnterVehicle(playerid, vehicleid, ispassenger)
 		    }
 		}
 	    else if(caradress == 4 || caradress == 5){
-	 	   if(GetPlayerColor(playerid) != 0xFAFAFAA){
+	 	   if(GetPlayerColor(playerid) != 0xAFAFAFAA){
 		        SendClientMessageToAll(COLOR_GREEN,"Um veículo ultimate dos  POLICIAIS foi destruído por um jogador rival");
 		        SetTimerEx("vehicleRespawn", ULTRESPAWN*1000, false, "i", caradress);
 	    		DestroyVehicle(vehicleid);
@@ -1249,10 +1189,12 @@ public OnPlayerExitVehicle(playerid, vehicleid)
 	new veiculo;
 	new especial = false;
 	
-	for(new i = 0; i < 8; i++){
-	    if(vehicleid == ULT[i]){
-			veiculo = i;
-			especial = true;
+	if(pUltVeh[playerid]){
+		for(new i = 0; i < 8; i++){
+	    	if(vehicleid == ULT[i]){
+				veiculo = i;
+				especial = true;
+			}
 		}
 	}
 	
@@ -1262,6 +1204,50 @@ public OnPlayerExitVehicle(playerid, vehicleid)
     DestroyVehicle(vehicleid);
     pUltVeh[playerid] = false;
     
+    return 1;
+}
+
+public OnPlayerWeaponShot(playerid, weaponid, hittype, hitid, Float:fX, Float:fY, Float:fZ)
+{
+ 	new especial = false, veiculo;
+ 	
+ 	if(hittype == 2){
+ 	    for(new i = 0; i < 8; i++){
+ 	        if(hitid == ULT[i]){
+ 	            especial = true;
+ 	            veiculo = ULT[i];
+ 	        }
+ 	    }
+ 	}
+ 	
+	if(especial && weaponid == 34){
+	    new Float:x, Float:y, Float:z;
+	    GetVehiclePos(veiculo, x, y, z);
+    	CreateExplosion(x, y, z, 0, 10.1);
+    }
+
+    return 1;
+}
+
+public OnPlayerText(playerid, text[])
+{
+    new pText[144];
+    new pName[MAX_PLAYER_NAME];
+    GetPlayerName(playerid, pName, sizeof(pName));
+
+	format(pText, sizeof(pText), "{%06x}%s(id: %i): {FFFFFF}%s", GetPlayerColor(playerid) >>> 8, pName, playerid, text);
+    SendClientMessageToAll(-1, pText);
+
+    return 0;
+}
+
+public OnPlayerTakeDamage(playerid, issuerid, Float: amount, weaponid, bodypart) {
+
+    if(issuerid != INVALID_PLAYER_ID && weaponid == 34 && bodypart == 9){
+		SetPlayerHealth(playerid, 0.0);
+		SendClientMessage(issuerid, COLOR_RED, "[HEADSHOT] +5 scores");
+		SetPlayerScore(issuerid, GetPlayerScore(issuerid) + 4);
+	}
     return 1;
 }
 
