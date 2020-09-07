@@ -2,6 +2,7 @@
 #include <core>
 #include <float>
 #include <dof2>
+#include <streamer>
 
 #pragma tabsize 0
 
@@ -18,14 +19,16 @@
 #define GIVECASH_DELAY 5000
 #define DIALOG_REGISTER 1
 #define DIALOG_LOGIN 2
+#define DIALOG_RADIO 3
 
-#define VRESPAWN 120
-#define ULTRESPAWN 600
+#define VRESPAWN 120        //tempo de respawn dos veículos abandonados (segundos)	(2 minutos)
+#define ULTRESPAWN 600      //tempo de respawn dos veículos ultimate (segundos)     (10 minutos)
+#define SPEEDUP 1.5         //multiplicador de velocidade do speedboost
 
 #define NUMVALUES 4
 
 forward Givecashdelaytimer(playerid);
-forward SendMSG();
+//forward SendMSG();
 forward PayDay();
 forward SetPlayerRandomSpawn(playerid);
 forward SetupPlayerForClassSelection(playerid);
@@ -34,14 +37,14 @@ forward SendPlayerFormattedText(playerid, const str[], define);
 forward public SendAllFormattedText(playerid, const str[], define);
 
 //------------------------------------------------------------------------------------------------------
-new RandomMSG[][] =
+/*new RandomMSG[][] =
 {
-  "[SERVER] Adicione nosso ip aos favoritos: (em breve)",
+  //"[SERVER] Adicione nosso ip aos favoritos: (em breve)",
   "[SERVER] Não mate membros do seu time.",
   "[SERVER] Use /ajuda para ver alguns comandos",
-  "[SERVER] Está cansado da Deagle? Use /armas",
+  "[SERVER] Está cansado das armas padrão? Use /armas",
   "[SERVER] Utilize /mudar para mudar de time!",
-  "[SERVER] Nãoo faça DB (Drive-BY, Atropelar ou matar alguem de dentro do carro) ou será punido!",
+  "[SERVER] Não faça DB (Drive-BY, Atropelar ou matar alguem de dentro do carro) ou será punido!",
   "[SERVER] Se você está num veiculo e a vitima estiver em outro, não é drive-by!",
   "[SERVER] Se quiser entrar no modo pacífico use /godmode",
   "[SERVER] Você pode ir para a arena minigun usando /minigun",
@@ -52,13 +55,18 @@ new RandomMSG[][] =
 new RandomColors [] =
 {
   0xEEDD82 //Azul Piscina
-};
+}; */
 
 new Text:players;
 new iSpawnSet[MAX_PLAYERS];
 new pClass[MAX_PLAYERS]; // Stores the player's class
 new Text:dTextDraw;
 new KillingSpree[MAX_PLAYERS];
+new radioon[MAX_PLAYERS];
+new loggedin[MAX_PLAYERS];
+new gangarea[4];
+new countdown[MAX_PLAYERS];
+new controdado[MAX_PLAYERS];
 
 new Float:gRandomPlayerSpawns[4][3] = {
 {413.513,2533.530,18.668}, // Base Terroristas
@@ -102,7 +110,7 @@ main()
 //----------------------------------------------------------------------------------------------------
 
 public OnPlayerConnect(playerid) {
-    new string[128], Player_Name[MAX_PLAYER_NAME];
+    new string[256], Player_Name[MAX_PLAYER_NAME];
     new strings[15];
     new file[64];
 
@@ -113,6 +121,10 @@ public OnPlayerConnect(playerid) {
     SetPVarInt(playerid,"TK",0);
     PlayerInfo[playerid][god] = false;
     pUltVeh[playerid] = false;
+    radioon[playerid] = false;
+    loggedin[playerid] = false;
+    countdown[playerid] = 3;
+    controdado[playerid] = false;
     
     //contador de usuários ativos
 	format(strings, 15, "%d Online",GetOnLinePlayers());
@@ -124,8 +136,22 @@ public OnPlayerConnect(playerid) {
 	SendPlayerFormattedText(playerid, "Seja bem vindo, utilize /ajuda para ver os comandos.", 0);
 	
     GetPlayerName(playerid,Player_Name,sizeof(Player_Name));
-    format(string,256,"==> %s [Id:%i] Entrou no servidor",Player_Name,playerid); SendClientMessageToAll(ROXO,string);
-
+    format(string,256,"==> %s [Id:%i] Entrou no servidor",Player_Name,playerid);
+    SendToAllButPlayer(playerid, ROXO, string);
+    
+    //update na perícia das armas
+	SetPlayerSkillLevel(playerid, WEAPONSKILL_PISTOL, 999);
+	SetPlayerSkillLevel(playerid, WEAPONSKILL_PISTOL_SILENCED, 999);
+	SetPlayerSkillLevel(playerid, WEAPONSKILL_DESERT_EAGLE, 999);
+	SetPlayerSkillLevel(playerid, WEAPONSKILL_SHOTGUN, 999);
+	SetPlayerSkillLevel(playerid, WEAPONSKILL_SPAS12_SHOTGUN, 999);
+	SetPlayerSkillLevel(playerid, WEAPONSKILL_MICRO_UZI, 999);
+	SetPlayerSkillLevel(playerid, WEAPONSKILL_MP5, 999);
+	SetPlayerSkillLevel(playerid, WEAPONSKILL_AK47, 999);
+	SetPlayerSkillLevel(playerid, WEAPONSKILL_M4, 999);
+	SetPlayerSkillLevel(playerid, WEAPONSKILL_SNIPERRIFLE, 999);
+	SetPlayerSkillLevel(playerid, WEAPONSKILL_SAWNOFF_SHOTGUN, 999);
+    
     //sistema de contas
     format(file,sizeof(file),"Accs/%s.ini",Player_Name);
     if(DOF2_FileExists(file)) {
@@ -134,15 +160,20 @@ public OnPlayerConnect(playerid) {
         ShowPlayerDialog(playerid, DIALOG_REGISTER, DIALOG_STYLE_INPUT,"Por favor, registre!","{FFFFFF}Digite sua {00FF22}SENHA {FFFFFF}para se cadastrar.","Cadastro","Morrer");
     }
     
+    //carrega gangzones
+    GangZoneShowForPlayer(playerid, gangarea[0], 0xFF0000AA);
+	GangZoneShowForPlayer(playerid, gangarea[1], 0x2641FEAA);
+	GangZoneShowForPlayer(playerid, gangarea[2], 0xd804d8AA);
+	GangZoneShowForPlayer(playerid, gangarea[3], 0x33AA33AA);
+    
 	return 1;
 }
 
 //------------------------------------------
 
-public OnPlayerDisconnect(playerid) {
+public OnPlayerDisconnect(playerid, reason) {
     new strings[15];
     new string[128], Player_Name[MAX_PLAYER_NAME];
-    new file[64];
     GetPlayerName(playerid,Player_Name,sizeof(Player_Name));
     
     //update usuários online
@@ -152,26 +183,31 @@ public OnPlayerDisconnect(playerid) {
 	TextDrawShowForPlayer(playerid, players);
 	
 	//avisos
-    format(string,256,"<== %s [Id:%i] Saiu do servidor",Player_Name,playerid); SendClientMessageToAll(ROXO,string);
+	switch(reason){
+		//perdeu a conexão.
+	    case 0: format(string,256,"<== %s [Id:%i] Saiu do servidor (perdeu a ereç... conexão**).",Player_Name,playerid);
+	    //saiu por vontade própria / fechou o jogo.
+	    case 1:{
+	        if(GetPVarInt(playerid,"Morto") == 1) format(string,256,"<== %s [Id:%i] Saiu do servidor (rage quit).",Player_Name,playerid);
+			else format(string,256,"<== %s [Id:%i] Saiu do servidor (decidiu sair).",Player_Name,playerid);
+		}
+	    //foi expulso / banido
+	    case 2: format(string,256,"<== %s [Id:%i] Saiu do servidor (expulso).",Player_Name,playerid);
+	}
+	SendClientMessageToAll(ROXO,string);
 
 	//salva status
-    format(file,sizeof(file),"Accs/%s.ini",Player_Name);
-    DOF2_SetInt(file, "Kills",PlayerInfo[playerid][pKills]);
-    DOF2_SetInt(file, "Deaths",PlayerInfo[playerid][pDeaths]);
-    DOF2_SetInt(file, "Money",GetPlayerMoney(playerid));
-    DOF2_SetInt(file, "Score",GetPlayerScore(playerid));
-    DOF2_SetInt(file, "AdminLevel",PlayerInfo[playerid][pAdmin]);
+	updateacc(playerid);
+	resetVariables(playerid);
 
-    DOF2_SaveFile();
-
-
-    return 0;
+    return 1;
 }
 
 //------------------------------------------------------------------------------------------------------
 
 public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[]) {
     switch(dialogid) {
+        //sistema de registro e login
         case DIALOG_REGISTER: { //cria arquivo de conta
             if(!response) Kick(playerid);
             if(!strlen(inputtext)) return ShowPlayerDialog(playerid, DIALOG_REGISTER, DIALOG_STYLE_INPUT,"Por favor, registre!","{FFFFFF}Digite aqui a sua {00FF22}SENHA {FFFFFF}para se cadastrar.","Cadastrar","Morrer");
@@ -187,6 +223,8 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[]) {
                 DOF2_SetInt(file, "AdminLevel", 0);
 				GivePlayerMoney(playerid, 1000);
                 DOF2_SaveFile();
+                loggedin[playerid] = true;
+                return 1;
             }
         }
         case DIALOG_LOGIN: { //carrega arquivo de conta
@@ -204,6 +242,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[]) {
                         PlayerInfo[playerid][pAdmin] = DOF2_GetInt(file,"AdminLevel");
                         GivePlayerMoney(playerid, PlayerInfo[playerid][pMoney]);
                         SetPlayerScore(playerid, PlayerInfo[playerid][pScore]);
+                        loggedin[playerid] = true;
                         return 1;
                     }
                     else
@@ -214,8 +253,39 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[]) {
                 }
             }
         }
-    }
-    return 1;
+        //fim do sistema de registro e login
+        
+        //radio
+        case DIALOG_RADIO: {
+            radioon[playerid] = true;
+            switch(listitem) {
+       	    	case 0: {
+     	        	SendClientMessage(playerid, COLOR_RED, "[RADIO] Radio Studio Souto. (/radio para desligar)");
+      	        	PlayAudioStreamForPlayer(playerid, "http://192.99.150.31:9113/stream");
+        	    }
+        	    case 1: {
+        	        SendClientMessage(playerid, COLOR_RED, "[RADIO] Nova Revolução. (/radio para desligar)");
+      	        	PlayAudioStreamForPlayer(playerid, "https://servidor21-1.brlogic.com:7466/live");
+        	    }
+        	    case 2: {
+        	        SendClientMessage(playerid, COLOR_RED, "[RADIO] Heavy Metal Ears Radio. (/radio para desligar)");
+        	        PlayAudioStreamForPlayer(playerid, "http://51.222.41.239:8680/stream");
+        	    }
+        	    case 3: {
+        	        SendClientMessage(playerid, COLOR_RED, "[RADIO] Clássicos do Funk. (/radio para desligar)");
+        	        PlayAudioStreamForPlayer(playerid, "https://radio.saopaulo01.com.br/9812/stream");
+        	    }
+        	    case 4: {
+        	        SendClientMessage(playerid, COLOR_RED, "Opa amigão, blz? Vejo que você está tentando travar o meu código.");
+        	        SendClientMessage(playerid, COLOR_RED, "Este sistema ainda está em desenvolvimento");
+        	        SendClientMessage(playerid, COLOR_RED, "Estas radios vazias são apenas placeholders enquanto eu termino o sistema");
+     	        	//radio 5
+        	    }
+        	}
+        	return 1;
+       	}
+   	}
+    return 0;
 }
 
 //----------------------------------------------------------------
@@ -224,6 +294,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 {
 	if(GetPVarInt(playerid,"Morto") == 1)
         return SendClientMessage(playerid,COLOR_RED,"Você não pode utilizar comandos enquanto está morto!");
+        
 	new string[256];
 	new playermoney;
 	new sendername[MAX_PLAYER_NAME];
@@ -231,7 +302,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 	new giveplayerid, moneys, idx;
 	new cmd[256];
 	new Player_Name[MAX_PLAYER_NAME];
-	GetPlayerName(playerid,Player_Name,sizeof(Player_Name)),
+	GetPlayerName(playerid,Player_Name,sizeof(Player_Name));
 
 	cmd = strtok(cmdtext, idx);
 
@@ -247,45 +318,57 @@ public OnPlayerCommandText(playerid, cmdtext[])
 	if(strcmp(cmd, "/comandos", true) == 0) {
 		SendClientMessage(playerid, COLOR_DGREEN, " - AJUDA - /ajuda /comandos /armas /objetivo /regras");
 		SendClientMessage(playerid, COLOR_DGREEN, " - ARMAS - /m4 /sniper /deagle /shotgun /mp5 /suprema");
-		SendClientMessage(playerid, COLOR_DGREEN, " - JOGADOR - /mudar /allahu /godmode /v / nitro");
-		SendClientMessage(playerid, COLOR_DGREEN, " - TELEPORTS - /arena /minigun /sniperdm");
+		SendClientMessage(playerid, COLOR_DGREEN, " - JOGADOR - /mudar /allahu /godmode /v");
+		SendClientMessage(playerid, COLOR_DGREEN, " - TELEPORTS - /mapas /dms");
+		SendClientMessage(playerid, COLOR_DGREEN, " - TELEPORTS - /granadadm /minigun /sniperdm /2minigun /arenasf");
 
 		return 1;
+	}
+	//-----------------------------------------------------------
+	if(strcmp(cmd, "/dms", true) == 0){
+	    SendClientMessage(playerid, COLOR_DGREEN, " - /GRANADADM /MINIGUN /SNIPERDM");
+	    SendClientMessage(playerid, COLOR_DGREEN, " - /2MINIGUN /ARENASF");
+	
+	    return 1;
 	}
 	//-----------------------------------------------------------
 	if(strcmp(cmd, "/armas", true) == 0) {
 		SendClientMessage(playerid, COLOR_DGREEN, " - 100 balas de Deagle ($1000) /deagle");
-		SendClientMessage(playerid, COLOR_DGREEN, " - 25 balas de Sniper ($5000) /sniper");
-		SendClientMessage(playerid, COLOR_DGREEN, " - 100 balas de M4 ($3000) /m4");
-		SendClientMessage(playerid, COLOR_DGREEN, " - 100 balas de MP5 ($2000) /mp5");
+		SendClientMessage(playerid, COLOR_DGREEN, " - 100 balas de Sniper ($5000) /sniper");
+		SendClientMessage(playerid, COLOR_DGREEN, " - 200 balas de M4 ($3000) /m4");
+		SendClientMessage(playerid, COLOR_DGREEN, " - 300 balas de MP5 ($2000) /mp5");
 		SendClientMessage(playerid, COLOR_DGREEN, " - 50 balas de Shotgun ($2000) /shotgun");
+  		SendClientMessage(playerid, COLOR_DGREEN, " - 20 granadas ($1000) /granada");
+  		SendClientMessage(playerid, COLOR_DGREEN, " - jetpack + 500 balas de UZI($1500) /jetpack");
+  		SendClientMessage(playerid, COLOR_DGREEN, " - 50 balas de Sawnoff Shotgun ($2000) /sawnoff");
 		SendClientMessage(playerid, COLOR_DGREEN, " - arma suprema ($1) /suprema");
-		SendClientMessage(playerid, COLOR_DGREEN, " - Você não pode comprar armas no modo pacífico");
 
 		return 1;
 	}
 	//-----------------------------------------------------------
-	if(strcmp(cmd, "/arena", true) == 0) {
+	/*if(strcmp(cmd, "/arena", true) == 0) {
 		if(GetPVarInt(playerid,"Arena") == 1) return SendClientMessage(playerid,COLOR_RED,"Você ja foi pra arena!");
-		if(PlayerInfo[playerid][god] == true) return SendClientMessage(playerid,COLOR_RED,"Desabilite o modo pacífico primeiro (/godmode)");
+		if(HasGod(playerid)) return 1;
 		
 		SetPVarInt(playerid,"Arena",1);
 		SetPlayerPos(playerid,2479.7864,2318.5823,91.6300);
 		SetPlayerHealth(playerid, 100);
 		GameTextForPlayer(playerid,"~g~Mate ~w~e nao ~r~morra!",3000,5);
-  		format(string,128,"[ID:%i] %s Foi para a arena (/arena)",playerid,Player_Name),
-   		SendClientMessageToAll(COLOR_DGREEN,string);
+  		format(string,128,"[ID:%i] %s Foi para a arena (/arena)",playerid,Player_Name);
+  		SendToAllButPlayer(playerid, COLOR_DGREEN, string);
+  		SendClientMessage(playerid, COLOR_DGREEN, "Você foi para a arena!");
 
 		return 1;
-    }
+    }*/
     //-----------------------------------------------------------
 	if(strcmp(cmd, "/deagle", true) == 0) {
-	    if(PlayerInfo[playerid][god] == true) return SendClientMessage(playerid,COLOR_RED,"Desabilite o modo pacífico primeiro (/godmode)");
+	    if(HasGod(playerid) || IsInDM(playerid)) return 1;
+	    
     	if(GetPlayerMoney(playerid)>=1000) {
         	GivePlayerWeapon(playerid,24,100);
         	GivePlayerMoney(playerid,-1000);
         	format(string,128,"[ID:%i] %s comprou uma Deagle (/deagle)",playerid,Player_Name),
-        	SendClientMessageToAll(COLOR_DGREEN,string);
+        	SendToAllButPlayer(playerid, COLOR_DGREEN, string);
    		}
     	else return SendClientMessage(playerid,COLOR_GREY, "Você não tem nem $1000!");
 
@@ -293,13 +376,14 @@ public OnPlayerCommandText(playerid, cmdtext[])
 	}
 	//-----------------------------------------------------------
 	if(strcmp(cmd, "/sniper", true) == 0) {
-	    if(PlayerInfo[playerid][god] == true) return SendClientMessage(playerid,COLOR_RED,"Desabilite o modo pacífico primeiro (/godmode)");
+	    if(HasGod(playerid) || IsInDM(playerid)) return 1;
+	    
     	if(GetPlayerMoney(playerid)>=5000) {
         	GivePlayerWeapon(playerid,34,100);
         	GivePlayerMoney(playerid,-5000);
         	SendClientMessage(playerid,COLOR_GREY, "Você comprou uma sniper com 100 balas por $5000!");
         	format(string,128,"[ID:%i] %s comprou uma Sniper (/sniper)",playerid,Player_Name),
-        	SendClientMessageToAll(COLOR_DGREEN,string);
+        	SendToAllButPlayer(playerid, COLOR_DGREEN, string);
     	}
     	else return SendClientMessage(playerid,COLOR_GREY, "Você não tem nem $5000!");
 
@@ -307,13 +391,14 @@ public OnPlayerCommandText(playerid, cmdtext[])
 	}
 	//-----------------------------------------------------------
 	if(strcmp(cmd, "/m4", true) == 0) {
-	    if(PlayerInfo[playerid][god] == true) return SendClientMessage(playerid,COLOR_RED,"Desabilite o modo pacífico primeiro (/godmode)");
+	    if(HasGod(playerid) || IsInDM(playerid)) return 1;
+	    
     	if(GetPlayerMoney(playerid)>=3000){
-        	GivePlayerWeapon(playerid,31,100);
+        	GivePlayerWeapon(playerid,31,200);
         	GivePlayerMoney(playerid,-3000);
-			SendClientMessage(playerid,COLOR_GREY, "Você comprou uma m4 com 100 balas por $3000!");
+			SendClientMessage(playerid,COLOR_GREY, "Você comprou uma m4 com 200 balas por $3000!");
         	format(string,128,"[ID:%i] %s Comprou uma m4 (/m4)",playerid,Player_Name),
-        	SendClientMessageToAll(COLOR_DGREEN,string);
+        	SendToAllButPlayer(playerid, COLOR_DGREEN, string);
     	}
     	else return SendClientMessage(playerid,COLOR_GREY, "Você não tem nem $3000!");
 
@@ -321,13 +406,14 @@ public OnPlayerCommandText(playerid, cmdtext[])
 	}
 	//-----------------------------------------------------------
 	if(strcmp(cmd, "/mp5", true) == 0) {
-	    if(PlayerInfo[playerid][god] == true) return SendClientMessage(playerid,COLOR_RED,"Desabilite o modo pacífico primeiro (/godmode)");
+	    if(HasGod(playerid) || IsInDM(playerid)) return 1;
+	    
     	if(GetPlayerMoney(playerid)>=2000) {
-        	GivePlayerWeapon(playerid,29,100);
+        	GivePlayerWeapon(playerid,29,300);
         	GivePlayerMoney(playerid,-2000);
-  			SendClientMessage(playerid,COLOR_GREY, "Você comprou uma mp5 com 100 balas por $2000!");
+  			SendClientMessage(playerid,COLOR_GREY, "Você comprou uma mp5 com 300 balas por $2000!");
         	format(string,128,"[ID:%i] %s comprou uma MP5 (/mp5)",playerid,Player_Name),
-        	SendClientMessageToAll(COLOR_DGREEN,string);
+        	SendToAllButPlayer(playerid, COLOR_DGREEN, string);
 		}
     	else return SendClientMessage(playerid,COLOR_GREY, "Você não tem nem $2000!");
 
@@ -335,13 +421,60 @@ public OnPlayerCommandText(playerid, cmdtext[])
 	}
 	//-----------------------------------------------------------
 	if(strcmp(cmd, "/shotgun", true) == 0) {
-	    if(PlayerInfo[playerid][god] == true) return SendClientMessage(playerid,COLOR_RED,"Desabilite o modo pacífico primeiro (/godmode)");
+	    if(HasGod(playerid) || IsInDM(playerid)) return 1;
+	    
     	if(GetPlayerMoney(playerid)>=2000) {
         	GivePlayerWeapon(playerid,25,50);
         	GivePlayerMoney(playerid,-2000);
   			SendClientMessage(playerid,COLOR_GREY, "Você comprou uma Shotgun com 50 balas por $2000!");
         	format(string,128,"[ID:%i] %s comprou uma Shotgun (/shotgun)",playerid,Player_Name),
-        	SendClientMessageToAll(COLOR_DGREEN,string);
+        	SendToAllButPlayer(playerid, COLOR_DGREEN, string);
+    	}
+    	else return SendClientMessage(playerid,COLOR_GREY, "Você não tem nem $2000!");
+
+		return 0x01;
+	}
+	//-----------------------------------------------------------
+	if(strcmp(cmd, "/granada", true) == 0) {
+	    if(HasGod(playerid) || IsInDM(playerid)) return 1;
+
+    	if(GetPlayerMoney(playerid)>=1000) {
+        	GivePlayerWeapon(playerid,16,20);
+        	GivePlayerMoney(playerid,-1000);
+  			SendClientMessage(playerid,COLOR_GREY, "Você comprou 20 granadas por $1000!");
+        	format(string,128,"[ID:%i] %s comprou granadas (/granada)",playerid,Player_Name),
+        	SendToAllButPlayer(playerid, COLOR_DGREEN, string);
+    	}
+    	else return SendClientMessage(playerid,COLOR_GREY, "Você não tem nem $1000!");
+
+		return 0x01;
+	}
+	//-----------------------------------------------------------
+	if(strcmp(cmd, "/jetpack", true) == 0) {
+	    if(HasGod(playerid) || IsInDM(playerid)) return 1;
+
+    	if(GetPlayerMoney(playerid)>=1500) {
+        	SetPlayerSpecialAction(playerid,2);
+        	GivePlayerWeapon(playerid, 28, 500);
+        	GivePlayerMoney(playerid,-1500);
+  			SendClientMessage(playerid,COLOR_GREY, "Você comprou uma jetpack por $1500!");
+        	format(string,128,"[ID:%i] %s comprou uma jetpack (/jetpack)",playerid,Player_Name),
+        	SendToAllButPlayer(playerid, COLOR_DGREEN, string);
+    	}
+    	else return SendClientMessage(playerid,COLOR_GREY, "Você não tem nem $1500!");
+
+		return 0x01;
+	}
+	//-----------------------------------------------------------
+	if(strcmp(cmd, "/sawnoff", true) == 0) {
+	    if(HasGod(playerid) || IsInDM(playerid)) return 1;
+
+    	if(GetPlayerMoney(playerid)>=2000) {
+        	GivePlayerWeapon(playerid,26,50);
+        	GivePlayerMoney(playerid,-2000);
+  			SendClientMessage(playerid,COLOR_GREY, "Você comprou uma Shotgun de cano serrado com 50 balas por $2000!");
+        	format(string,128,"[ID:%i] %s comprou uma Shotgun de cano serrado (/sawnoff)",playerid,Player_Name),
+        	SendToAllButPlayer(playerid, COLOR_DGREEN, string);
     	}
     	else return SendClientMessage(playerid,COLOR_GREY, "Você não tem nem $2000!");
 
@@ -349,23 +482,26 @@ public OnPlayerCommandText(playerid, cmdtext[])
 	}
 	//-----------------------------------------------------------
 	if(strcmp(cmd, "/suprema", true) == 0) {
-	    if(PlayerInfo[playerid][god] == true) return SendClientMessage(playerid,COLOR_RED,"Desabilite o modo pacífico primeiro (/godmode)");
+	    if(HasGod(playerid) || IsInDM(playerid)) return 1;
+	    
         GivePlayerWeapon(playerid,10,1);
         GivePlayerMoney(playerid,-1);
-  		SendClientMessage(playerid,COLOR_GREY, "Você comprou a suprema ponta dupla por 1 dï¿½lar");
+  		SendClientMessage(playerid,COLOR_GREY, "Você comprou a suprema ponta dupla por 1 dólar");
         format(string,128,"[ID:%i] %s comprou a suprema (/suprema)",playerid,Player_Name),
-        SendClientMessageToAll(COLOR_DGREEN,string);
+        SendToAllButPlayer(playerid, COLOR_DGREEN, string);
         
         return 0x01;
     }
     
     //-----------------------------------------------------------
 	if(strcmp(cmd, "/mudar", true) == 0) {
+	    if(HasGod(playerid) || IsInDM(playerid)) return 1;
+	
 		PlayerInfo[playerid][god] = false;
 	    ForceClassSelection(playerid);
 	    SetPlayerHealth(playerid,0);
         format(string,128,"[ID:%i] %s Resolveu mudar de time (/mudar)",playerid,Player_Name),
-        SendClientMessageToAll(COLOR_DGREEN,string);
+        SendToAllButPlayer(playerid, COLOR_DGREEN, string);
 
 		return 1;
 	}
@@ -380,7 +516,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 	//-----------------------------------------------------------
 	if(strcmp(cmd, "/regras", true) == 0) {
 		SendClientMessage(playerid, COLOR_DGREEN, " - Proibido o uso de: Cheats, Mods CLEO, e outros programas/mods ilegais");
-		SendClientMessage(playerid, COLOR_DGREEN, " - Proibido DB/Spawn Kill/Heli Kill, PROIBIDO SE MATAR NA ARENA (PULAR DO PREDIO)");
+		//SendClientMessage(playerid, COLOR_DGREEN, " - Proibido DB/Spawn Kill/Heli Kill, PROIBIDO SE MATAR NA ARENA (PULAR DO PREDIO)");
 		SendClientMessage(playerid, COLOR_DGREEN, " - Proibido Team Kill: Matar jogador do mesmo time! (mesma cor de nick)");
 		SendClientMessage(playerid, COLOR_DGREEN, " - Obrigatório compartilhar a esposa com todos os outros players.");
 
@@ -388,22 +524,21 @@ public OnPlayerCommandText(playerid, cmdtext[])
 	}
 	//-----------------------------------------------------------
  	if(strcmp(cmdtext, "/allahu", true) == 0) {
-		PlayerInfo[playerid][god] = false;
+ 	    if(HasGod(playerid) || IsInDM(playerid)) return 1;
+ 	
         new Float:Life, Float:X, Float:Y, Float:Z;
         GetPlayerHealth(playerid,Life);
         GetPlayerPos(playerid, X, Y, Z);
         
         if(Life < 80){
 	 		SendClientMessage(playerid,COLOR_RED,"Você não pode cometer suicidio com a vida baixa.");
-	 		PlayerInfo[playerid][god] = true;
 	 		return 1;
 		}
         
         SetPlayerHealth(playerid,0);
         CreateExplosion(X, Y, Z, 0, 15.0);
         format(string,128,"[ID:%i] %s ganhou 70 virgens (/allahu)",playerid,Player_Name),
-        SendClientMessageToAll(COLOR_DGREEN,string);
-        PlayerInfo[playerid][god] = false;
+        SendToAllButPlayer(playerid, COLOR_DGREEN, string);
 
 		return 1;
     }
@@ -412,8 +547,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
 		new Float:Life;
         GetPlayerHealth(playerid,Life);
         
-	    if(PlayerInfo[playerid][god] == false){
-	        if(Life < 100) return SendClientMessage(playerid,COLOR_RED,"Você só pode entrar no moto pacífico com a vida cheia.");
+	    if(!HasGod(playerid)){
+	        if(Life < 80) return SendClientMessage(playerid,COLOR_RED,"Você só pode entrar no moto pacífico com a vida cheia.");
 	        if(CallRemoteFunction("getDM", "i", playerid) == 1) return SendClientMessage(playerid,COLOR_RED,"Você não pode entrar no modo pacífico dentro do DM. Aqui é guerra, rapá!");
 	        
 	        PlayerInfo[playerid][god] = true;
@@ -472,22 +607,47 @@ public OnPlayerCommandText(playerid, cmdtext[])
 		}
 		return 1;
 	}
-	//-----------------------------------------------------------
-	if(strcmp(cmd, "/nitro", true) == 0) {
-		new Float:X, Float:Y, Float:Z;
-		GetPlayerPos(playerid, X, Y, Z);
-
-  		if(!IsPlayerInAnyVehicle(playerid)) return SendClientMessage(playerid, COLOR_RED, "Você precisa estar em um carro.");
-
-   		new vehicleid = GetPlayerVehicleID(playerid);
-   		AddVehicleComponent(vehicleid, 1010); // x10 nitro
-
-        PlayerPlaySound(playerid, 1133, X, Y, Z);
-
-   		SendClientMessage(playerid, COLOR_GREEN, "Nitro adicionado!");
+	//--------------------------------------------------------
+	if (strcmp(cmd, "/radio", true) == 0)
+	{
+		if(!radioon[playerid]) ShowPlayerDialog(playerid, DIALOG_RADIO, DIALOG_STYLE_LIST, "{0FCC08}RADIO AO VIVO", "[PAGODE] Radio Studio Souto\n[FORRÓ] Nova Revolução\n[ROCK] Heavy Metal Ears Radio\n[FUNK] Clássicos do Funk\nradio5", "TOCAR", "FECHAR");
+		else {
+			SendClientMessage(playerid, COLOR_YELLOW, "[RADIO] Radio desligado");
+		    StopAudioStreamForPlayer(playerid);
+		    radioon[playerid] = false;
+		}
 		return 1;
 	}
-	//--------------------------------------------------------
+	//----------------------------------------------------------
+	if (strcmp(cmd, "/status", true) == 0)
+	{
+	    new tmp[256], statusplayer;
+	    new Float:kd;
+		tmp = strtok(cmdtext, idx);
+		
+		if(!strlen(tmp)) statusplayer = playerid;
+		else statusplayer = strval(tmp);
+		
+		if(!IsPlayerConnected(statusplayer)) return SendClientMessage(playerid, COLOR_YELLOW, "Jogador não conectado");
+		
+		GetPlayerName(statusplayer,Player_Name,sizeof(Player_Name));
+  		kd = float(PlayerInfo[statusplayer][pKills]) / float(PlayerInfo[statusplayer][pDeaths]);
+		
+		format(string,128,"Status de %s",Player_Name);
+		SendClientMessage(playerid, COLOR_YELLOW, string);
+		format(string,128,"Kills: %i, Mortes: %i, KD: %f",PlayerInfo[statusplayer][pKills], PlayerInfo[statusplayer][pDeaths], kd);
+		SendClientMessage(playerid, COLOR_YELLOW, string);
+		
+	
+	    return 1;
+	}
+	//---------------------------------------------------------------------------
+	if (strcmp(cmd, "/surrender", true) == 0) {SetPlayerSpecialAction(playerid,SPECIAL_ACTION_HANDSUP); return 1;}
+	if (strcmp(cmd, "/dancar", true) == 0) {SetPlayerSpecialAction(playerid,SPECIAL_ACTION_DANCE4); return 1;}
+	if (strcmp(cmd, "/beijar", true) == 0) {ApplyAnimation(playerid,"KISSING","Playa_Kiss_01",4.1, 0, 1, 1, 1, 1, 1); return 1;}
+	if (strcmp(cmd, "/fap", true) == 0) {ApplyAnimation(playerid,"PAULNMAC","wank_loop",4.1, 0, 1, 1, 1, 1, 1); return 1;}
+	if (strcmp(cmd, "/pararanim", true) == 0) {SetPlayerSpecialAction(playerid,SPECIAL_ACTION_NONE); return 1;}
+	//---------------------------------------------------------------------------
 
 	
 	//admin commands
@@ -589,7 +749,9 @@ public OnPlayerCommandText(playerid, cmdtext[])
 		}
 		//-----------------------------------------------------------
 		if(strcmp(cmd, "/goto", true) == 0) {
-		    if(PlayerInfo[playerid][pAdmin] < 2) return SendClientMessage(playerid, COLOR_YELLOW, "NO ENOUGH LEVEL, STRANGER!");
+			if(PlayerInfo[playerid][pAdmin] < 2) return SendClientMessage(playerid, COLOR_YELLOW, "NO ENOUGH LEVEL, STRANGER!");
+			if(CallRemoteFunction("getDM", "i", playerid) == 1)
+		 		return SendClientMessage(playerid,COLOR_RED,"Para com essa merda, viado!");
 		    
 		    new tmp[256], player2;
 			tmp = strtok(cmdtext, idx);
@@ -609,13 +771,105 @@ public OnPlayerCommandText(playerid, cmdtext[])
         		LinkVehicleToInterior(GetPlayerVehicleID(playerid), GetPlayerInterior(player2));
     		}
     		else {
+				new jetpack = false;
+    		    if(GetPlayerSpecialAction(playerid) == SPECIAL_ACTION_USEJETPACK) jetpack = true;
+    		
     		    format(string, sizeof(string), "Você foi até %s", GetPlayerNameEx(player2));
         		SendClientMessage(playerid, COLOR_YELLOW, string);
         		GetPlayerPos(player2, pX, pY, pZ);
         		SetPlayerPos(playerid, pX+1, pY+1, pZ);
         		SetPlayerInterior(playerid, GetPlayerInterior(player2));
+        		SetPlayerVirtualWorld(playerid, GetPlayerVirtualWorld(player2));
+        		
+        		if(jetpack) SetPlayerSpecialAction(playerid,SPECIAL_ACTION_USEJETPACK);
     			}
 			return 1;
+		}
+		//-----------------------------------------------------------
+		if(strcmp(cmd, "/lgoto", true) == 0){
+		    new Float:x, Float:y, Float:z;
+		    new tmp[256];
+		    tmp = strtok(cmdtext, idx);
+		    x = strval(tmp);
+		    tmp = strtok(cmdtext, idx);
+		    y = strval(tmp);
+		    tmp = strtok(cmdtext, idx);
+		    z = strval(tmp);
+		    
+		    SetPlayerPos(playerid, x, y, z);
+		    
+		    return 1;
+		}
+		//-----------------------------------------------------------
+		if(strcmp(cmd, "/posicao", true) == 0){
+		    new Float:X, Float:Z, Float:Y, Float:A;
+		    new tmp[256], posicplayer;
+		    
+		    tmp = strtok(cmdtext, idx);
+
+			if(!strlen(tmp)) posicplayer = playerid;
+			else posicplayer = strval(tmp);
+		    
+			if(!IsPlayerConnected(posicplayer)) return SendClientMessage(playerid, ROXO, "Jogador não conectado");
+			
+			//nome
+			GetPlayerName(posicplayer,Player_Name,sizeof(Player_Name));
+			format(string, sizeof(string), "jogador: %s  ID: %i", Player_Name, posicplayer);
+			SendClientMessage(playerid, COLOR_YELLOW, string);
+		    
+		    //posição da câmera
+        	GetPlayerCameraPos(posicplayer, X, Y, Z);
+        	format(string, sizeof(string), "posição geográfica da câmera: X: %f  Y: %f  Z: %f", X, Y, Z);
+        	SendClientMessage(playerid, COLOR_YELLOW, string);
+        	
+        	//apontando para
+        	GetPlayerCameraFrontVector(posicplayer, X, Y, Z);
+        	format(string, sizeof(string), "angulo da câmera: X: %f  Y: %f  Z: %f", X, Y, Z);
+        	SendClientMessage(playerid, COLOR_YELLOW, string);
+        	
+        	//posição do jogador
+        	GetPlayerPos(posicplayer, X, Y, Z);
+        	GetPlayerFacingAngle(posicplayer, A);
+        	format(string, sizeof(string), "posição geográfica do jogador: X: %f  Y: %f  Z: %f", X, Y, Z);
+        	SendClientMessage(playerid, COLOR_YELLOW, string);
+        	format(string, sizeof(string), "rotação do jogador: %fº", A);
+        	SendClientMessage(playerid, COLOR_YELLOW, string);
+        	
+        	
+        	//virtual world
+        	format(string, sizeof(string), "universo: %i interior: %i", GetPlayerVirtualWorld(posicplayer), GetPlayerInterior(posicplayer));
+		    SendClientMessage(playerid, COLOR_YELLOW, string);
+		    
+		    return 1;
+		}
+		
+		if(strcmp(cmd, "/deletecar", true) == 0){
+		    if(!IsPlayerInAnyVehicle(playerid)) return SendClientMessage(playerid, COLOR_YELLOW, "Você precisa estar em um veículo. Duh!");
+		
+		    DestroyVehicle(GetPlayerVehicleID(playerid));
+		
+		    return 1;
+		}
+		
+		if(strcmp(cmd, "/cp", true) == 0){
+		    new Float:X, Float:Z, Float:Y;
+ 	    	new tmp[256], player2;
+
+		    tmp = strtok(cmdtext, idx);
+		    
+		    if(!strlen(tmp)) return SendClientMessage(playerid, COLOR_YELLOW, "[USO] /cp [id]");
+
+			player2 = strval(tmp);
+			
+			if(!IsPlayerConnected(player2) || playerid == player2) return SendClientMessage(playerid, COLOR_YELLOW, "Jogador não conectado, ou é você mesmo.");
+			if(GetPlayerState(player2) != PLAYER_STATE_DRIVER) return SendClientMessage(playerid, COLOR_YELLOW, "Jogador não está dirigindo.");
+			
+			new p2veh = GetPlayerVehicleID(player2);
+			GetPlayerPos(player2, X, Y, Z);
+			SetPlayerPos(playerid, X, Y, Z);
+			PutPlayerInVehicle(playerid, p2veh, 1);
+		    
+		    return 1;
 		}
 		//-----------------------------------------------------------
 	} //fim dos comandos de ADM
@@ -629,13 +883,15 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
 public OnPlayerSpawn(playerid)
 {
+	//reset de variáveis
 	TogglePlayerClock(playerid,0);
-	SetPVarInt(playerid,"Arena",0);
+	//SetPVarInt(playerid,"Arena",0);
 	SetPVarInt(playerid,"Morto",0);
 	//SetPVarInt(playerid,"TK",0);
 
 	if(CallRemoteFunction("getDM", "i", playerid) != 1){
 	    SetPlayerInterior(playerid,0);
+	    SetPlayerVirtualWorld(playerid, 0);
 		SetPlayerRandomSpawn(playerid);
 		GivePlayerWeapon(playerid, 4, 1);
 		GivePlayerWeapon(playerid, 30, 500);
@@ -643,47 +899,20 @@ public OnPlayerSpawn(playerid)
 	
 	    switch(pClass[playerid])
 	    {
-	        //time vermelho
-	        case 0: spawnVermelho(playerid);
-	        case 1: spawnPolicia(playerid);
-	        case 2: spawnPolicia(playerid);
-	        case 3: spawnPolicia(playerid);
-	        //time azul
-	        case 4: spawnAzul(playerid);
-	        case 5: spawnPolicia(playerid);
-	        case 6: spawnPolicia(playerid);
-	        case 7: spawnPolicia(playerid);
-	        // time policiais
-	        case 8: spawnPolicia(playerid);
-	        case 9: spawnPolicia(playerid);
-	        case 10: spawnPolicia(playerid);
-	        case 11: spawnPolicia(playerid);
-	        //time roxo
-	        case 12: spawnRoxo(playerid);
-	        case 13: spawnRoxo(playerid);
-	        case 14: spawnRoxo(playerid);
-	        case 15: spawnRoxo(playerid);
+	        case 0, 1, 2, 3: 		spawnVermelho(playerid);
+	        case 4, 5, 6, 7: 		spawnAzul(playerid);
+	        case 8, 9, 10, 11: 		spawnPolicia(playerid);
+	        case 12, 13, 14, 15: 	spawnRoxo(playerid);
         }
+        
+        return 1;
 	}
 	
-	//update na perícia das armas
-	SetPlayerSkillLevel(playerid, WEAPONSKILL_PISTOL, 999);
-	SetPlayerSkillLevel(playerid, WEAPONSKILL_PISTOL_SILENCED, 999);
-	SetPlayerSkillLevel(playerid, WEAPONSKILL_DESERT_EAGLE, 999);
-	SetPlayerSkillLevel(playerid, WEAPONSKILL_SHOTGUN, 999);
-	SetPlayerSkillLevel(playerid, WEAPONSKILL_SPAS12_SHOTGUN, 999);
-	SetPlayerSkillLevel(playerid, WEAPONSKILL_MICRO_UZI, 999);
-	SetPlayerSkillLevel(playerid, WEAPONSKILL_MP5, 999);
-	SetPlayerSkillLevel(playerid, WEAPONSKILL_AK47, 999);
-	SetPlayerSkillLevel(playerid, WEAPONSKILL_M4, 999);
-	SetPlayerSkillLevel(playerid, WEAPONSKILL_SNIPERRIFLE, 999);
-	SetPlayerSkillLevel(playerid, WEAPONSKILL_SAWNOFF_SHOTGUN, 999);
-	
-	return 1;
+	else return 1;
 }
 
 stock spawnVermelho(playerid){
-    SetPlayerColor(playerid, 0xFF0000AA);
+    SetPlayerColor(playerid, COLOR_RED);
     SetPlayerPos(playerid, 693.668,1959.560,5.109);
 	SetPlayerFacingAngle(playerid, 180.0);
 	
@@ -691,7 +920,7 @@ stock spawnVermelho(playerid){
 }
 
 stock spawnAzul(playerid){
-    SetPlayerColor(playerid, 0x2641FEAA);
+    SetPlayerColor(playerid, COLOR_BLUE);
 	SetPlayerPos(playerid, -131.450,1229.313,19.469);
  	SetPlayerFacingAngle(playerid, 180.0);
  	
@@ -699,7 +928,7 @@ stock spawnAzul(playerid){
 }
 
 stock spawnPolicia(playerid){
-    SetPlayerColor(playerid, 0xAFAFAFAA);
+    SetPlayerColor(playerid, COLOR_GREEN);
     SetPlayerPos(playerid, -548.710,2593.98,53.483);
     SetPlayerFacingAngle(playerid, 180.0);
     
@@ -710,6 +939,34 @@ stock spawnRoxo(playerid){
     SetPlayerColor(playerid, ROXO);
     SetPlayerPos(playerid, 413.513,2533.530,18.668);
     SetPlayerFacingAngle(playerid, 90.0);
+
+	return 1;
+}
+
+stock updateacc(playerid){
+    if(loggedin[playerid]){
+        new file[64], Player_Name[MAX_PLAYER_NAME];
+        GetPlayerName(playerid,Player_Name,sizeof(Player_Name));
+        format(file,sizeof(file),"Accs/%s.ini",Player_Name);
+    
+	    format(file,sizeof(file),"Accs/%s.ini",Player_Name);
+	    DOF2_SetInt(file, "Kills",PlayerInfo[playerid][pKills]);
+	    DOF2_SetInt(file, "Deaths",PlayerInfo[playerid][pDeaths]);
+	    DOF2_SetInt(file, "Money",GetPlayerMoney(playerid));
+	    DOF2_SetInt(file, "Score",GetPlayerScore(playerid));
+	    DOF2_SetInt(file, "AdminLevel",PlayerInfo[playerid][pAdmin]);
+
+	    DOF2_SaveFile();
+    }
+    return 1;
+}
+
+stock resetVariables(playerid){
+    PlayerInfo[playerid][pKills] = 0;
+    PlayerInfo[playerid][pDeaths] = 0;
+    PlayerInfo[playerid][pMoney] = 0;
+    PlayerInfo[playerid][pScore] = 0;
+    PlayerInfo[playerid][pAdmin] = 0;
 
 	return 1;
 }
@@ -800,7 +1057,7 @@ public OnPlayerDeath(playerid, killerid, reason)
         
         if(GetPVarInt(killerid,"TK") > 1) {
             SendClientMessage(killerid, COLOR_RED,"Você foi kikado por cometer Team-Kill 3 vezes.");
-            SendClientMessageToAll(COLOR_RED,"O jogador abaixo foi kickado por matar jogadores do mesmo time");
+            SendClientMessageToAll(COLOR_RED,"Jogador expulso por prática de team-killing");
 			Kick(killerid);
         }
         
@@ -905,22 +1162,13 @@ public OnPlayerRequestClass(playerid, classid)
 	SetupPlayerForClassSelection(playerid);
  	pClass[playerid] = classid;
 	TextDrawShowForPlayer(playerid,dTextDraw);
-	if(classid == 0) GameTextForPlayer(playerid,"~w~Time ~r~Vermelho",5000,3);
-    if(classid == 1) GameTextForPlayer(playerid,"~w~Time ~r~Vermelho",5000,3);
-    if(classid == 2) GameTextForPlayer(playerid,"~w~Time ~r~Vermelho",5000,3);
-    if(classid == 3) GameTextForPlayer(playerid,"~w~Time ~r~Vermelho",5000,3);
-   	if(classid == 4) GameTextForPlayer(playerid,"~w~Time ~b~Azul",5000,3);
-   	if(classid == 5) GameTextForPlayer(playerid,"~w~Time ~b~Azul",5000,3);
-   	if(classid == 6) GameTextForPlayer(playerid,"~w~Time ~b~Azul",5000,3);
-   	if(classid == 7) GameTextForPlayer(playerid,"~w~Time ~b~Azul",50000,3);
-   	if(classid == 8) GameTextForPlayer(playerid,"~w~Time dos ~g~Policiais",5000,3);
-   	if(classid == 9) GameTextForPlayer(playerid,"~w~Time dos ~g~Policiais",5000,3);
-   	if(classid == 10) GameTextForPlayer(playerid,"~w~Time dos ~g~Policiais",5000,3);
-   	if(classid == 11) GameTextForPlayer(playerid,"~w~Time dos ~g~Policiais",5000,3);
-   	if(classid == 12) GameTextForPlayer(playerid,"~w~Time ~p~Roxo",5000,3);
-   	if(classid == 13) GameTextForPlayer(playerid,"~w~Time ~p~Roxo",5000,3);
-	if(classid == 14) GameTextForPlayer(playerid,"~w~Time ~p~Roxo",5000,3);
-	if(classid == 15) GameTextForPlayer(playerid,"~w~Time ~p~Roxo",5000,3);
+	
+	switch(classid){
+	    case 0 .. 3: 		GameTextForPlayer(playerid,"~w~Time ~r~Vermelho",1000,3);
+	    case 4 .. 7: 		GameTextForPlayer(playerid,"~w~Time ~b~Azul",1000,3);
+	    case 8 .. 11: 		GameTextForPlayer(playerid,"~w~Time dos ~g~Policiais",1000,3);
+	    case 12 .. 15:		GameTextForPlayer(playerid,"~w~Time ~p~Roxo",1000,3);
+	}
 	
     return 1;
 }
@@ -930,10 +1178,15 @@ public OnPlayerRequestClass(playerid, classid)
 public SetupPlayerForClassSelection(playerid)
 {
  	SetPlayerInterior(playerid,0);
-	SetPlayerPos(playerid,-371.5435,2134.4326,133.1797);
-	SetPlayerFacingAngle(playerid, 179.0);
-	SetPlayerCameraPos(playerid,-371.5435,2127.4326,140.1797);
-	SetPlayerCameraLookAt(playerid,-371.5435,2134.4326,133.1797);
+	SetPlayerVirtualWorld(playerid, 40);
+	SetPlayerPos(playerid,-427.502685,2498.057373,124.304687);
+	SetPlayerFacingAngle(playerid, 180);
+	SetPlayerCameraPos(playerid,-427.183105,2492.807861,125.447502);
+	SetPlayerCameraLookAt(playerid,-427.502685,2498.057373,125.904687);
+	Streamer_UpdateEx(playerid,-427.502685,2498.057373,124.304687);
+	ApplyAnimation(playerid, "PAULNMAC", "wank_loop", 4.1, 1, 1, 1, 1, 1, 1);
+	
+	return 1;
 }
 
 public GameModeExitFunc()
@@ -966,15 +1219,15 @@ public OnGameModeInit()
 		}
 	}
 	SetGameModeText("SQS2");
-	SetTimer("SendMSG", 60000, true);
-	SetTimer("PayDay", 600000, true); // 11 minutos
+	//SetTimer("SendMSG", 60000, true);
+	SetTimer("PayDay", 600000, true); // 10 minutos
 	SendRconCommand("mapname San Andreas");
 
 	ShowPlayerMarkers(1);
 	UsePlayerPedAnims();
 	ShowNameTags(1);
-	DisableInteriorEnterExits();
-	EnableStuntBonusForAll(0);
+	//DisableInteriorEnterExits();
+	EnableStuntBonusForAll(1);
 
 	// Player Class's
 	AddPlayerClass(19,2512.8611,-1673.2799,13.5104,87.7485,0,0,0,0,0,0); // Class 0 Vermelho
@@ -1103,21 +1356,32 @@ public OnGameModeInit()
 	ULT[5] = CreateVehicle(432,-501.697,2604.585,53.632,177.447,43,0,ULTRESPAWN);
 	ULT[6] = CreateVehicle(520,325.099,2538.880,17.527,178.709,0,0,ULTRESPAWN);
 	ULT[7] = CreateVehicle(432,291.4309,2539.1721,16.8295,180.2851,43,0,ULTRESPAWN);
+	
+	//gangzones
+	gangarea[0] = GangZoneCreate(669.4268, 1869.0018, 750.9764, 2010.1271); //vermelho
+	gangarea[1] = GangZoneCreate(-110.1572, 1263.5206, -201.4910, 1181.4847); //azul
+	gangarea[2] = GangZoneCreate(249.5530, 2475.7998, 454.3233, 2558.2373); //roxo
+	gangarea[3] = GangZoneCreate(-576.7505, 2540.9456, -453.0009,2649.1321); //policia
 
 	return 1;
 }
 
-public SendMSG()
+/*public SendMSG()
 {
 	new random2 = random(sizeof(RandomColors));
  	new randMSG = random(sizeof(RandomMSG));
  	SendClientMessageToAll(RandomColors[random2], RandomMSG[randMSG]);
-}
+}*/
 
 public PayDay()
 {
-	for(new i=0; i<=MAX_PLAYERS; i++) GivePlayerMoney(i, 10000);
-	SendClientMessageToAll(COLOR_RED, "Bônus por ficar online: $10000");
+	for(new i=0; i<=MAX_PLAYERS; i++){
+	    if(IsPlayerConnected(i)){
+			GivePlayerMoney(i, 50000);
+			updateacc(i);
+		}
+	}
+	SendClientMessageToAll(COLOR_RED, "Bônus por ficar online: $50000");
 }
 
 public SendPlayerFormattedText(playerid, const str[], define)
@@ -1148,27 +1412,30 @@ public OnPlayerEnterVehicle(playerid, vehicleid, ispassenger)
 	}
 	if(especial){
 		if(caradress == 0 || caradress == 1){
-		    if(GetPlayerColor(playerid) != 0xFF0000AA){
+		    if(GetPlayerColor(playerid) != COLOR_RED){
 		        SendClientMessageToAll(COLOR_RED,"Um veículo ultimate da equipe VERMELHA foi destruído por um jogador rival");
 		        SetTimerEx("vehicleRespawn", ULTRESPAWN*1000, false, "i", caradress);
 	    		DestroyVehicle(vehicleid);
 	    		pUltVeh[playerid] = false;
+				ULT[caradress] = -1;
 		    }
 		}
 		else if(caradress == 2 || caradress == 3){
-	 	   if(GetPlayerColor(playerid) != 0x2641FEAA){
+	 	   if(GetPlayerColor(playerid) != COLOR_BLUE){
 		        SendClientMessageToAll(COLOR_BLUE,"Um veículo ultimate da equipe AZUL foi destruído por um jogador rival");
 		        SetTimerEx("vehicleRespawn", ULTRESPAWN*1000, false, "i", caradress);
 	    		DestroyVehicle(vehicleid);
 	    		pUltVeh[playerid] = false;
+	    		ULT[caradress] = -1;
 		    }
 		}
 	    else if(caradress == 4 || caradress == 5){
-	 	   if(GetPlayerColor(playerid) != 0xAFAFAFAA){
+	 	   if(GetPlayerColor(playerid) != COLOR_GREEN){
 		        SendClientMessageToAll(COLOR_GREEN,"Um veículo ultimate dos  POLICIAIS foi destruído por um jogador rival");
 		        SetTimerEx("vehicleRespawn", ULTRESPAWN*1000, false, "i", caradress);
 	    		DestroyVehicle(vehicleid);
 	    		pUltVeh[playerid] = false;
+	    		ULT[caradress] = -1;
 		    }
 		}
 	    else if(caradress == 6 || caradress == 7){
@@ -1177,6 +1444,7 @@ public OnPlayerEnterVehicle(playerid, vehicleid, ispassenger)
 		        SetTimerEx("vehicleRespawn", ULTRESPAWN*1000, false, "i", caradress);
 	    		DestroyVehicle(vehicleid);
 	    		pUltVeh[playerid] = false;
+	    		ULT[caradress] = -1;
 		    }
 		}
 	}
@@ -1203,6 +1471,7 @@ public OnPlayerExitVehicle(playerid, vehicleid)
     SetTimerEx("vehicleRespawn", ULTRESPAWN*1000, false, "i", veiculo);
     DestroyVehicle(vehicleid);
     pUltVeh[playerid] = false;
+    ULT[veiculo] = -1;
     
     return 1;
 }
@@ -1231,11 +1500,13 @@ public OnPlayerWeaponShot(playerid, weaponid, hittype, hitid, Float:fX, Float:fY
 
 public OnPlayerText(playerid, text[])
 {
+    if(CallRemoteFunction("getDM", "i", playerid) == 0) SetPlayerChatBubble(playerid,text,0xFFFFFFFF, 50.0, 5000);
+
     new pText[144];
     new pName[MAX_PLAYER_NAME];
     GetPlayerName(playerid, pName, sizeof(pName));
 
-	format(pText, sizeof(pText), "{%06x}%s(id: %i): {FFFFFF}%s", GetPlayerColor(playerid) >>> 8, pName, playerid, text);
+	format(pText, sizeof(pText), "{%06x}%s (%i): {FFFFFF}%s", GetPlayerColor(playerid) >>> 8, pName, playerid, text);
     SendClientMessageToAll(-1, pText);
 
     return 0;
@@ -1244,12 +1515,155 @@ public OnPlayerText(playerid, text[])
 public OnPlayerTakeDamage(playerid, issuerid, Float: amount, weaponid, bodypart) {
 
     if(issuerid != INVALID_PLAYER_ID && weaponid == 34 && bodypart == 9){
+        new Float:x, Float:y, Float:z;
+		GetPlayerPos(issuerid, x, y, z);
+    
 		SetPlayerHealth(playerid, 0.0);
 		SendClientMessage(issuerid, COLOR_RED, "[HEADSHOT] +5 scores");
+		PlayerPlaySound(issuerid, 1190, x, y, z);
 		SetPlayerScore(issuerid, GetPlayerScore(issuerid) + 4);
 	}
     return 1;
 }
+
+public OnPlayerUpdate(playerid)
+{
+	new Float:X, Float:Y, Float:Z;
+	GetPlayerPos(playerid, X, Y, Z);
+	
+	if(!controdado[playerid]){
+		//zona vermelha
+		if(X >= 669.4268 && Y >= 1869.0018 && X <= 750.9764 && Y <= 2010.1271)
+		{
+		    if(GetPlayerColor(playerid) == COLOR_RED) return 1;
+		    else puneInvasor(playerid);
+		}
+		//zona azul
+		else if(X >= -201.4910 && Y >= 1181.4847 && X <= -110.1572 && Y <= 1263.5206)
+		{
+	        if(GetPlayerColor(playerid) == COLOR_BLUE) return 1;
+	        else puneInvasor(playerid);
+		}
+		//zona roxa
+		else if(X >= 249.5530 && Y >= 2475.7998 && X <= 454.3233 && Y <= 2558.2373)
+		{
+	        if(GetPlayerColor(playerid) == ROXO) return 1;
+	        else puneInvasor(playerid);
+		}
+		//zona polícia
+		else if(X >= -576.7505 && Y >= 2540.9456 && X <= -453.0009 && Y <= 2649.1321)
+		{
+	        if(GetPlayerColor(playerid) == COLOR_GREEN) return 1;
+	        else puneInvasor(playerid);
+		}
+		
+		else countdown[playerid] = 3;
+	}
+
+	return 1;
+}
+
+stock puneInvasor(playerid){
+	new string[256];
+    controdado[playerid] = true;
+    
+    format(string, sizeof(string), "~r~tem %i seg para sair da base", countdown[playerid]);
+    GameTextForPlayer(playerid, string, 2000, 3);
+    
+    if(countdown[playerid] == 0){
+        new Float:X, Float:Y, Float:Z;
+        new Float:hp;
+        GetPlayerHealth(playerid, hp);
+        GetPlayerPos(playerid, X, Y, Z);
+        PlayerPlaySound(playerid, 1130, X, Y, Z);
+        if(hp-15 <= 0){
+			SetPlayerPos(playerid, X, Y, Z+100);
+			CreateExplosion(X, Y, Z+100, 0, 30.0);
+        }
+        SetPlayerHealth(playerid, hp-15);
+        
+        if(GetPlayerState(playerid) == PLAYER_STATE_DRIVER){
+            new Float:vhp;
+            GetVehicleHealth(GetPlayerVehicleID(playerid), vhp);
+            if(vhp < 0) vhp = 0;
+            SetVehicleHealth(GetPlayerVehicleID(playerid), vhp-150);
+        }
+    }
+    else countdown[playerid]--;
+    
+    SetTimerEx("checaDeNovo", 1000, false, "i", playerid);
+	
+	return 1;
+}
+
+forward checaDeNovo(playerid);
+public checaDeNovo (playerid){
+	controdado[playerid] = false;
+	
+	return 1;
+}
+
+public OnPlayerKeyStateChange(playerid, newkeys, oldkeys)
+{
+	if (GetPlayerState(playerid) == PLAYER_STATE_DRIVER)
+	{
+	   //speedboost
+		if (newkeys & KEY_LOOK_BEHIND) //botão 2
+		{
+		    new Float:vx, Float:vy, Float:vz;
+		    GetVehicleVelocity(GetPlayerVehicleID(playerid), vx, vy, vz);
+
+			SetVehicleVelocity(GetPlayerVehicleID(playerid), vx * SPEEDUP, vy * SPEEDUP, vz * SPEEDUP);
+
+		    return 1;
+		}
+		
+		//sair dos veículos RC
+		if (newkeys & KEY_SECONDARY_ATTACK) //ENTER
+		{
+		    new model = GetVehicleModel(GetPlayerVehicleID(playerid));
+		    
+		    if(model == 441 || model == 464 || model == 465 || model == 501 || model == 564 || model == 594){
+				new Float: x, Float: y, Float: z;
+				
+				GetPlayerPos(playerid, x, y, z);
+				SetPlayerPos(playerid, x, y, z+1);
+				return 1;
+		    }
+		}
+		
+		//atira com tankzinho
+		if (GetVehicleModel(GetPlayerVehicleID(playerid)) == 564){
+		    if (newkeys & KEY_ACTION)
+		    {
+		        new Float:X, Float:Y, Float:Z, Float:A;
+		        
+		        GetPlayerPos(playerid, X, Y, Z);
+		        GetVehicleZAngle(GetPlayerVehicleID(playerid), A);
+		        
+		        X += 20 * floatsin(-A, degrees);
+		        Y += 20 * floatcos(-A, degrees);
+		        
+		        CreateExplosion(X, Y, Z, 0, 10.0);
+		        
+		        return 1;
+		    }
+		}
+		
+		//colocar nitro
+  		if (newkeys & KEY_FIRE) //ALT ou MOUSE CLICK
+		{
+		    new vehicleid = GetPlayerVehicleID(playerid);
+   			AddVehicleComponent(vehicleid, 1010);
+
+		    return 1;
+		}
+		
+	}
+
+	return 1;
+}
+
 
 strtok(const string[], &index)
 {
@@ -1285,6 +1699,35 @@ stock GetPlayerNameEx(playerid)
 	new Naome[24];
 	GetPlayerName(playerid, Naome, 24);
 	return Naome;
+}
+
+stock HasGod(playerid)
+{
+	if(PlayerInfo[playerid][god]){
+	    SendClientMessage(playerid, COLOR_RED, "Você não pode utilizar este comando com godmode ligado.");
+	    return true;
+	}
+	
+	else return false;
+}
+
+stock IsInDM(playerid)
+{
+    if(CallRemoteFunction("getDM", "i", playerid) == 1){
+        SendClientMessage(playerid, COLOR_RED, "Você não pode usar este comando dentro do death match.");
+        return true;
+    }
+    
+    else return false;
+}
+
+stock SendToAllButPlayer(playerid, colorHX, string[256])
+{
+	for(new i = 0; i < MAX_PLAYERS; i++){
+	    if(IsPlayerConnected(i) && i != playerid)
+	        SendClientMessage(i, colorHX, string);
+	}
+	return 1;
 }
 
 forward GetAdmin(playerid);
@@ -1324,7 +1767,7 @@ public vehicleRespawn(veiculo)
 		ULT[6] = CreateVehicle(520,325.099,2538.880,17.527,178.709,0,0,ULTRESPAWN);
 		SendClientMessageToAll(ROXO,"Hydra da equipe roxa renasceu");
 	}
-	else if(veiculo == 7){
+	else if(veiculo == 7){ //rhino roxo
 		ULT[7] = CreateVehicle(432,291.4309,2539.1721,16.8295,180.2851,43,0,ULTRESPAWN);
 		SendClientMessageToAll(ROXO,"Rhino da equipe roxa renasceu");
 	}
